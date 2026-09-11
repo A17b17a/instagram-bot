@@ -7,7 +7,7 @@ from instagrapi.types import StoryMedia
 # إعدادات الحساب والمجلدات
 # ════════════════════════════════════════════════════════════════
 USERNAME = os.getenv("IG_USERNAME", "ahmed.hayali.iq")
-PASSWORD = os.getenv("IG_PASSWORD", "YOUR_PASSWORD_HERE")
+PASSWORD = os.getenv("IG_PASSWORD", "Ah.mu2086!.ah")
 
 DAILY_POST_DIR = Path("daily_post")
 
