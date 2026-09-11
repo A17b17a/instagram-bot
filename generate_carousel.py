@@ -33,7 +33,7 @@ GEMINI_URL = (
 )
 
 # ════════════════════════════════════════════════════════════════
-# الثيمات — حواف حادة، عناوين سوداء، خطوط فاصلة ومحيطة سوداء، ووسم أسود بأبيض
+# الثيمات — حواف حادة، ألوان واضحة
 # ════════════════════════════════════════════════════════════════
 NOTEBOOK_THEMES = [
     {
@@ -84,91 +84,95 @@ NOTEBOOK_THEMES = [
         "footer_text":   "#000000",
         "highlight":     "#b8860b",
     },
-    {
-        "name": "Warm Terracotta",
-        "bg":            "#e8ddd2",
-        "card_bg":       "#faf7f2",
-        "border":        "#000000",
-        "text":          "#1a0d00",
-        "title":         "#000000",
-        "header_name":   "#000000",
-        "header_handle": "#000000",
-        "counter":       "#000000",
-        "badge_bg":      "#000000",
-        "badge_text":    "#ffffff",
-        "divider":       "#000000",
-        "footer_text":   "#000000",
-        "highlight":     "#b8860b",
-    },
 ]
 
 # ════════════════════════════════════════════════════════════════
-# سلايد الاشتراك الثابتة (المعدلة حسب الملاحظات)
+# سلايد الاشتراك الشخصي المباشر
 # ════════════════════════════════════════════════════════════════
 SUBSCRIBE_SLIDE = {
-    "badge":  "تابعنا",
-    "title":  "استمر في التعلم معنا",
+    "badge":  "تابعني",
+    "title":  "استمر في التعلم معي",
     "textAr": (
-        "اشترك في قنواتنا لمزيد من الشروحات والملاحظات اليومية.\n\n"
-        "جميع روابط حساباتنا الرسمية تجدونها في وصف الحساب (البايو)."
+        "اشترك في الحساب لمزيد من الشروحات والملاحظات اليومية.\n\n"
+        "جميع روابط حساباتي تجدونها في بايو الحساب."
     ),
 }
 
 # ════════════════════════════════════════════════════════════════
-# البرومبت الرئيسي لـ Gemini مع إضافة كويز وتمييز الكلمات المفتاحية
+# البرومبت الرئيسي لـ Gemini — شرح عميق وتنسيق منظّم
 # ════════════════════════════════════════════════════════════════
 def build_prompt(used_topics: list) -> str:
     used_str = "\n".join(f"- {t}" for t in used_topics) if used_topics else "لا يوجد"
-    return f"""أنت متخصص في إنشاء محتوى تعليمي إنجليزي للمنصات الاجتماعية.
+    return f"""أنت أستاذ لغة إنجليزية محترف تشرح لطلاب المدارس العرقية والمبتدئين.
 
-المطلوب: اختر موضوعاً إنجليزياً تعليمياً وابتكر كاروسيل من 4 شرائح فقط.
+المطلوب: إنشاء محتوى تعليمي دسم وشامل من 4 شرائح.
 
-معايير الموضوع:
-- مفيد لطلاب المراحل الدراسية العراقية وكذلك لمن يطور إنجليزيته عموما
-- يتنوع بين: قواعد نحوية، مفردات، اخطاء شائعة، تراكيب مهمة، نصائح تعلم
-- لا تكرر اي موضوع من هذه القائمة:
+قواعد مهمة جداً:
+1. اختر موضوعاً يهم الطلاب (قواعد، فرق بين كلمتين، أخطاء شائعة، أزمنة).
+2. لا تكرر أي موضوع من القائمة التالية:
 {used_str}
 
-معايير اللغة والأسلوب:
-- عربية فصيحة مبسطة رسمية واضحة — لا عامية ابدا
-- معلم محترف يقدم فائدة مباشرة وعملية
-- يمنع تماماً استخدام أي إيموجي (Emoji)
-- يمنع عبارات مثل: "في هذا المنشور"، "ختاماً"، "شاركنا رأيك"
-- ضع الكلمات الإنجليزية الأساسية والأفعال المهمة في الشرائح بين نجمتين مضاعفتين مثل **make** أو **do** لتمييزها بصرياً.
+3. جودة الشرح:
+   - لا تكتفِ بوضع كلمات مجردة.
+   - اقدم شرحاً واضحاً للقاعدة، سبب الاستخدام، والفرق الدقيق.
+   - الشريحة 1: المقدمة والقاعدة الأساسية الشاملة.
+   - الشريحة 2: القسم الأول من القاعدة مع الشرح وأمثلة.
+   - الشريحة 3: القسم الثاني من القاعدة مع الشرح وأمثلة.
+   - الشريحة 4: تكون بعنوان "أمثلة توضيحية" وتتضمن 3 جمل كاملة معترفة ومحلولة تشرح المعنى.
 
-معايير الكابشن (Caption):
-- ضع عنواناً واضحاً للمنشور في السطر الأول.
-- اتبع الجملة الرئيسية بفوائد المنشور.
-- أضف سطرين في نهاية الكابشن يحتويان على سؤال اختباري (Quiz) قصير جداً متعلق بالدرس **بدون ذكر الإجابة**، واكتب تحته: "تجدون الإجابة الصحيحة في قناتنا على التيليجرام (الرابط في البايو)".
+4. تنسيق النصوص الإنجليزية والعربية:
+   - اجعل العبارات الإنجليزية بين نجمتين مضاعفتين مثل **Make a mistake** لتمييزها.
+   - لا تخلط الإنجليزي والعربي في نفس السطر بأسلوب يربك القارئ. ضع العبارة الإنجليزية ثم شارحة أو السطر التالي للترجمة.
 
-صيغة الاجابة: JSON فقط بدون أي نص خارجه:
+5. الكابشن (Caption):
+   - يحتوي على عنوان واضح في السطر الأول.
+   - يليه ملخص دسم للفائدة العلمية من الدرس.
+   - يمنع منعاً باتاً وضع أي أسئلة كويز أو إشارات لتليجرام.
+
+6. الشروط العامة:
+   - لا تستخدم أي إيموجي.
+   - لغة عربية فصيحة وسلسة.
+
+صيغة الإجابة: JSON فقط:
 {{
   "topic": "عنوان الموضوع | English Title",
-  "caption": "عنوان المنشور الواضح\\nفائدة المنشور الشاملة.\\n\\nسؤال الكويز:\\nسؤال قصير جداً بدون إجابة؟\\nتجدون الإجابة الصحيحة في قناتنا على التيليجرام (الرابط في البايو).",
+  "caption": "عنوان المنشور الواضح\\n\\nتوضيح وملاحظة علمية شاملة عن الدرس تجعل الطالب يفهم القاعدة بسهولة.",
   "slides": [
-    {{"badge": "نص قصير", "title": "عنوان الشريحة", "textAr": "المحتوى مع تمييز الأفعال والكلمات المفتاحية كـ **make** أو **do**"}},
-    {{"badge": "...", "title": "...", "textAr": "..."}},
-    {{"badge": "...", "title": "...", "textAr": "..."}},
-    {{"badge": "...", "title": "...", "textAr": "..."}}
+    {{"badge": "مفهوم أساسي", "title": "عنوان الشريحة الأولى", "textAr": "الشرح العلمي المفضل..."}},
+    {{"badge": "الحالة الأولى", "title": "عنوان الشريحة الثانية", "textAr": "الشرح التفصيلي..."}},
+    {{"badge": "الحالة الثانية", "title": "عنوان الشريحة الثالثة", "textAr": "الشرح التفصيلي..."}},
+    {{"badge": "تطبيق", "title": "أمثلة توضيحية", "textAr": "1. **He made a mistake** — هو ارتكب خطأ\\n2. **I do my homework** — أنا أؤدي واجبي\\n3. **She makes progress** — هي تحقق تقدماً"}}
   ]
 }}"""
 
 # ════════════════════════════════════════════════════════════════
-# مواضيع احتياطية
+# مواضيع احتياطية مفصلة
 # ════════════════════════════════════════════════════════════════
 FALLBACK_TOPICS = [
     {
-        "topic": "اخطاء شائعة | Make vs Do",
-        "caption": "الفرق بين Make و Do في اللغة الانجليزية\nخطأ يقع فيه معظم متعلمي الانجليزية عند استخدام الأفعال الأساسية.\n\nسؤال الكويز:\nChose the correct verb: He ___ a big mistake yesterday. (made / did)?\nتجدون الإجابة الصحيحة في قناتنا على التيليجرام (الرابط في البايو).",
+        "topic": "الفرق بين Make و Do",
+        "caption": "الفرق الدقيق بين الفعلين Make و Do في اللغة الإنجليزية\n\nكثيراً ما يقع الطلاب في خطأ التمييز بين **Make** و **Do**. القاعدة البسيطة هي أن **Make** تستخدم عند إيجاد أو إنتاج شيء جديد لم يكن موجوداً، بينما **Do** تُستخدم للأنشطة، الواجبات، والمهام العامة.",
         "slides": [
-            {"badge": "خطأ شائع", "title": "Make ام Do؟",
-             "textAr": "هذا السؤال يربك حتى المتقدمين.\n\nالقاعدة الاساسية:\n**Make** = تصنع شيئا او تنشئه\n**Do** = تؤدي نشاطا او مهمة"},
-            {"badge": "استخدام Make", "title": "متى تستخدم Make؟",
-             "textAr": "**Make a mistake** — يرتكب خطأ\n**Make a decision** — يتخذ قرارا\n**Make a friend** — يكون صداقة\n**Make money** — يكسب مالا"},
-            {"badge": "استخدام Do", "title": "متى تستخدم Do؟",
-             "textAr": "**Do homework** — يؤدي الواجب\n**Do exercise** — يمارس الرياضة\n**Do the dishes** — يغسل الاطباق\n**Do your best** — يبذل قصارى جهده"},
-            {"badge": "تطبيق", "title": "حل هذه الجمل",
-             "textAr": "1. He **made** a big mistake yesterday.\n2. I need to **do** my homework now.\n3. She wants to **make** new friends."},
+            {
+                "badge": "القاعدة العامة",
+                "title": "الفرق بين Make و Do",
+                "textAr": "الفعل **Make** يعني الصنع أو الإنشاء لشيء ملموس أو غير ملموس.\n\nالفعل **Do** يعني أداء مهمة، عمل، أو نشاط روتيني دون إنشاء شيء جديد."
+            },
+            {
+                "badge": "استخدام Make",
+                "title": "متى نستخدم Make؟",
+                "textAr": "نستخدم **Make** مع القرارات والأشياء المبتكرة:\n\n**Make a decision** — يتخذ قراراً\n**Make a mistake** — يرتكب خطأً\n**Make money** — يكسب مالاً"
+            },
+            {
+                "badge": "استخدام Do",
+                "title": "متى نستخدم Do؟",
+                "textAr": "نستخدم **Do** مع المهام والأنشطة اليومية:\n\n**Do homework** — يؤدي الواجب البيتي\n**Do business** — يجري أعمالاً تجارية\n**Do your best** — تبذل قصارى جهدك"
+            },
+            {
+                "badge": "تطبيق",
+                "title": "أمثلة توضيحية",
+                "textAr": "1. **He made a big mistake yesterday**\nهو ارتكب خطأ كبيراً يوم أمس.\n\n2. **I need to do my homework now**\nأحتاج إلى أداء واجبي البيتي الآن.\n\n3. **She wants to make new friends**\nهي ترغب في تكوين صداقات جديدة."
+            }
         ]
     }
 ]
@@ -200,8 +204,8 @@ def call_gemini(prompt: str) -> dict:
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
-            "temperature": 0.85,
-            "maxOutputTokens": 1500,
+            "temperature": 0.7,
+            "maxOutputTokens": 2000,
             "responseMimeType": "application/json",
         },
     }
@@ -265,37 +269,56 @@ def get_daily_topic() -> dict:
     return chosen
 
 # ════════════════════════════════════════════════════════════════
-# HTML السلايد — خط شبه رسمي (Cairo)، حواف حادة (0px)، تمييز ذهبي
+# المحرك البصري السليم لتنسيق النصوص الثنائية اللغة
 # ════════════════════════════════════════════════════════════════
-def build_slide_html(teacher_name, teacher_handle, title, badge,
-                     text_content, current_index, total_slides, theme):
+def format_text_content(text_content, highlight_color):
     lines = text_content.split('\n')
-    formatted = ""
+    formatted_blocks = []
+
     for line in lines:
         s = line.strip()
         if not s:
-            formatted += '<div style="height:12px;"></div>'
+            formatted_blocks.append('<div style="height:10px;"></div>')
             continue
 
-        # استبدال التنسيق **كلمة** باللون الذهبي للكلمات المفتاحية
+        # استبدال التظليل **word**
         s = re.sub(
             r'\*\*(.*?)\*\*',
-            f'<span style="color:{theme["highlight"]}; font-weight:800;">\\1</span>',
+            f'<span style="color:{highlight_color}; font-weight:800;">\\1</span>',
             s
         )
 
-        has_ar = any('\u0600' <= c <= '\u06FF' for c in s)
-        align, direction = ("right", "rtl") if has_ar else ("left", "ltr")
-        formatted += (
-            f'<div style="text-align:{align};direction:{direction};'
-            f'margin-bottom:16px;font-size:29px;line-height:1.75;'
-            f'font-weight:700;color:{theme["text"]};">{s}</div>'
-        )
+        # الفصل بين الإنجليزي والعربي إذا كانا يفصل بينهما —
+        if '—' in s:
+            parts = s.split('—')
+            en_part = parts[0].strip()
+            ar_part = parts[1].strip()
+            formatted_blocks.append(
+                f'<div style="margin-bottom:14px; background:rgba(0,0,0,0.03); padding:10px 14px; border-right:4px solid #000;">'
+                f'  <div dir="ltr" style="text-align:left; font-size:26px; font-weight:800; font-family:sans-serif;">{en_part}</div>'
+                f'  <div dir="rtl" style="text-align:right; font-size:24px; font-weight:700; color:#444; margin-top:4px;">{ar_part}</div>'
+                f'</div>'
+            )
+        else:
+            has_ar = any('\u0600' <= c <= '\u06FF' for c in s)
+            align, direction = ("right", "rtl") if has_ar else ("left", "ltr")
+            font_fam = "'Cairo', sans-serif" if has_ar else "sans-serif"
+            formatted_blocks.append(
+                f'<div style="text-align:{align}; direction:{direction}; font-family:{font_fam}; '
+                f'margin-bottom:12px; font-size:26px; line-height:1.6; font-weight:700;">{s}</div>'
+            )
+
+    return "".join(formatted_blocks)
+
+def build_slide_html(teacher_name, teacher_handle, title, badge,
+                     text_content, current_index, total_slides, theme):
+    
+    body_content = format_text_content(text_content, theme["highlight"])
 
     badge_html = (
-        f'<div style="background:{theme["badge_bg"]};color:{theme["badge_text"]};'
-        f'padding:8px 22px;border-radius:0px;font-size:21px;font-weight:800;'
-        f'white-space:nowrap;flex-shrink:0;">{badge}</div>'
+        f'<div style="background:{theme["badge_bg"]}; color:{theme["badge_text"]}; '
+        f'padding:6px 18px; border-radius:0px; font-size:20px; font-weight:800; '
+        f'white-space:nowrap; flex-shrink:0;">{badge}</div>'
     ) if badge else ""
 
     return f"""<!DOCTYPE html>
@@ -311,37 +334,37 @@ body {{
   width:1080px; height:1080px;
   background:{theme["bg"]};
   font-family:'Cairo', sans-serif;
+  color:{theme["text"]};
   display:flex; flex-direction:column;
-  padding:52px 58px 40px; overflow:hidden;
+  padding:50px 55px 35px; overflow:hidden;
 }}
 .header {{
   display:flex; justify-content:space-between; align-items:center;
-  padding-bottom:16px;
+  padding-bottom:14px;
   border-bottom:3px solid {theme["divider"]};
-  margin-bottom:28px;
+  margin-bottom:24px;
 }}
-.teacher-name  {{ font-size:38px; font-weight:900; color:{theme["header_name"]}; }}
-.teacher-handle{{ font-size:21px; font-weight:700; color:{theme["header_handle"]}; direction:ltr; text-align:right; margin-top:3px; }}
-.slide-counter {{ font-size:30px; font-weight:800; color:{theme["counter"]}; direction:ltr; }}
+.teacher-name  {{ font-size:36px; font-weight:900; color:{theme["header_name"]}; }}
+.teacher-handle{{ font-size:20px; font-weight:700; color:{theme["header_handle"]}; direction:ltr; text-align:right; margin-top:2px; }}
+.slide-counter {{ font-size:28px; font-weight:800; color:{theme["counter"]}; direction:ltr; }}
 .card {{
   flex:1; background:{theme["card_bg"]};
   border:3px solid {theme["border"]};
-  border-radius:0px; padding:40px 46px;
+  border-radius:0px; padding:36px 42px;
   display:flex; flex-direction:column;
-  box-shadow:none;
 }}
 .card-header {{
   display:flex; align-items:flex-start; justify-content:space-between; gap:14px;
-  margin-bottom:26px; padding-bottom:20px;
+  margin-bottom:22px; padding-bottom:16px;
   border-bottom:3px solid {theme["border"]};
 }}
-.card-title {{ font-size:42px; font-weight:900; color:{theme["title"]}; line-height:1.2; flex:1; }}
+.card-title {{ font-size:38px; font-weight:900; color:{theme["title"]}; line-height:1.2; flex:1; }}
 .card-body   {{ flex:1; display:flex; flex-direction:column; justify-content:center; }}
 .footer {{
-  margin-top:18px; padding-top:12px;
+  margin-top:16px; padding-top:10px;
   border-top:3px solid {theme["border"]};
   text-align:center;
-  font-size:19px; font-weight:800;
+  font-size:18px; font-weight:800;
   color:{theme["footer_text"]}; direction:ltr; letter-spacing:.8px;
 }}
 </style></head>
@@ -358,13 +381,13 @@ body {{
       <div class="card-title">{title}</div>
       {badge_html}
     </div>
-    <div class="card-body">{formatted}</div>
+    <div class="card-body">{body_content}</div>
   </div>
   <div class="footer">ahmed.hayali.iq</div>
 </body></html>"""
 
 # ════════════════════════════════════════════════════════════════
-# Main
+# Main execution
 # ════════════════════════════════════════════════════════════════
 async def main():
     OUTPUT_DIR.mkdir(exist_ok=True)
@@ -376,7 +399,6 @@ async def main():
 
     print(f"🎨 Theme  : {theme['name']}")
     print(f"📌 Topic  : {data['topic']}")
-    print(f"📊 Slides : {total_slides}")
 
     async with async_playwright() as p:
         browser = await p.chromium.launch(
@@ -405,7 +427,7 @@ async def main():
     (OUTPUT_DIR / "caption.txt").write_text(
         data.get("caption", ""), encoding="utf-8"
     )
-    print("🎉 Done! All 5 slides generated successfully.")
+    print("🎉 Carousel generated with clean layout and detailed content!")
 
 if __name__ == "__main__":
     asyncio.run(main())
