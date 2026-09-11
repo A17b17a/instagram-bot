@@ -74,29 +74,28 @@ PROMPT = f"""
 }}
 """
 
-def generate_content():
-    # قائمة بالنُسخ المتاحة للتجربة الآلية
-    candidate_models = [
-        "gemini-1.5-flash",
-        "gemini-1.5-pro",
-        "gemini-1.0-pro"
-    ]
-    
-    response = None
-    last_error = None
-    
-    for model_name in candidate_models:
-        try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(PROMPT)
-            print(f"تم توليد المحتوى بنجاح باستخدام النموذج: {model_name}")
-            break
-        except Exception as e:
-            last_error = e
-            continue
+def get_active_model_name():
+    """جلب اسم النموذج المتاح والفعال تلقائياً من الحساب"""
+    available_models = []
+    for m in genai.list_models():
+        if 'generateContent' in m.supported_generation_methods:
+            available_models.append(m.name)
             
-    if response is None:
-        raise Exception(f"فشل الاتصال بكافة نماذج Gemini المتاحة. الخطأ: {last_error}")
+    if not available_models:
+        raise Exception("لم يتم العثور على أي نموذج يدعم generateContent في حسابك.")
+        
+    for name in available_models:
+        if 'flash' in name.lower():
+            return name
+            
+    return available_models[0]
+
+def generate_content():
+    model_name = get_active_model_name()
+    print(f"تم اختيار النموذج الفعال تلقائياً: {model_name}")
+    
+    model = genai.GenerativeModel(model_name)
+    response = model.generate_content(PROMPT)
         
     text = response.text.strip()
     
