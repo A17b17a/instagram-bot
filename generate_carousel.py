@@ -1,8 +1,8 @@
 import os
 import json
 import random
-import requests
 from pathlib import Path
+import google.generativeai as genai
 from playwright.sync_api import sync_playwright
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -47,6 +47,7 @@ def generate_content_with_gemini():
     if not GEMINI_API_KEY:
         raise ValueError("❌ GEMINI_API_KEY غير موجود في Secrets!")
 
+    genai.configure(api_key=GEMINI_API_KEY)
     history = load_history()
     category = random.choice(CATEGORIES)
     
@@ -103,21 +104,25 @@ def generate_content_with_gemini():
     }}
     """
 
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY
-    }
-    data = {"contents": [{"parts": [{"text": prompt}]}]}
+    # قائمة بالنماذج المتاحة للتجربة بالتتابع لضمان عمل الخدمة دائماً
+    models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+    raw_text = None
+    last_error = None
 
-    response = requests.post(url, json=data, headers=headers, timeout=30)
-    
-    if response.status_code != 200:
-        raise Exception(f"Gemini API Error {response.status_code}: {response.text}")
+    for model_name in models_to_try:
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            raw_text = response.text
+            if raw_text:
+                break
+        except Exception as e:
+            last_error = e
+            continue
 
-    res_json = response.json()
-    raw_text = res_json['candidates'][0]['content']['parts'][0]['text']
-    
+    if not raw_text:
+        raise Exception(f"❌ Failed to generate content with Gemini models: {last_error}")
+
     cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
     content = json.loads(cleaned_text)
 
