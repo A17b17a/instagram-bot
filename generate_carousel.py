@@ -23,7 +23,6 @@ CATEGORIES = [
     "أخطاء شائعة والتعبير الصحيح (Common Mistakes & Idioms)"
 ]
 
-# اختيار صنف ووحدة بشكل عشوائي تماماً لكل يوم
 selected_unit = random.choice(UNITS)
 selected_category = random.choice(CATEGORIES)
 seed_id = random.randint(10000, 99999)
@@ -76,12 +75,28 @@ PROMPT = f"""
 """
 
 def generate_content():
-    try:
-        model = genai.GenerativeModel("gemini-1.5-flash-latest")
-        response = model.generate_content(PROMPT)
-    except Exception:
-        model = genai.GenerativeModel("gemini-2.5-flash")
-        response = model.generate_content(PROMPT)
+    # قائمة بالنُسخ المتاحة للتجربة الآلية
+    candidate_models = [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-1.0-pro"
+    ]
+    
+    response = None
+    last_error = None
+    
+    for model_name in candidate_models:
+        try:
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(PROMPT)
+            print(f"تم توليد المحتوى بنجاح باستخدام النموذج: {model_name}")
+            break
+        except Exception as e:
+            last_error = e
+            continue
+            
+    if response is None:
+        raise Exception(f"فشل الاتصال بكافة نماذج Gemini المتاحة. الخطأ: {last_error}")
         
     text = response.text.strip()
     
