@@ -5,23 +5,23 @@ import requests
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 OUTPUT_DIR = Path("daily_post")
 OUTPUT_DIR.mkdir(exist_ok=True)
 HISTORY_FILE = Path("used_topics.json")
 
-# تصنيفات المحتوى اليومية المتنوعة
+# التصنيفات المطلوبة للتنويع اليومي
 CATEGORIES = [
     "منهج السادس إعدادي (العراق - قواعد، قطع، إسقاطات، أو إملاء)",
     "منهج الثالث متوسط (العراق - قطع، قواعد، أو مفردات)",
-    "هل تعلم؟ (معلومات لغوية غير مألوفة وأصل الكلمات)",
-    "قصة قصيرة جداً ومفيدة مع معاني المفردات والصوتيات",
-    "أخطاء شائعة وتصحيحها (Common Mistakes)",
-    "مرادفات وأضداد (Synonyms & Antonyms)",
-    "قواعد اللغة الإنجليزية (Grammar Explanation)",
-    "مفردات ومصطلحات يومية (Daily Vocabulary & Idioms)",
-    "جمل وتراكيب للمحادثة اليومية (Daily Conversation)",
-    "مصطلحات أعمال وإيميلات احترافية (Business English)"
+    "هل تعلم؟ (معلومات لغوية نادرة وعجيبة عن اللغة الإنجليزية)",
+    "قصة قصيرة جداً ومفيدة مع معاني المفردات وتوضيح النطق",
+    "أخطاء شائعة وتصحيحها (Common Mistakes in English)",
+    "مرادفات وأضداد (Synonyms & Antonyms) مع أمثلة",
+    "قواعد اللغة الإنجليزية (Grammar Rules Explained)",
+    "مفردات ومصطلحات يومية (Daily Idioms & Expressions)",
+    "جمل وتراكيب جاهزة للمحادثة اليومية (Daily Conversations)",
+    "قطع خارجية وقراءة واستيعاب (Reading Comprehension)"
 ]
 
 COLOR_THEMES = [
@@ -45,7 +45,7 @@ def save_history(history):
 
 def generate_content_with_gemini():
     if not GEMINI_API_KEY:
-        raise ValueError("❌ GEMINI_API_KEY is not set in Repository Secrets!")
+        raise ValueError("❌ GEMINI_API_KEY غير موجود في Secrets!")
 
     history = load_history()
     category = random.choice(CATEGORIES)
@@ -58,26 +58,56 @@ def generate_content_with_gemini():
     المواضيع السابقة التي تم استخدامها (يمنع تكرارها كلياً):
     {json.dumps(history, ensure_ascii=False)}
 
-    المطلوب رد بصيغة JSON فقط دون أي نصوص إضافية أو markdown (لا تضع ```json):
+    المطلوب رد بصيغة JSON فقط دون أي نصوص إضافية أو markdown:
     {{
       "topic_title": "عنوان الموضوع الرئيسي المختصر",
       "category_name": "{category}",
       "slides": [
         {{
           "slide_number": 1,
-          "badge": "وسم الشريحة (مثلاً: القاعدة العامة / هل تعلم / القصة)",
+          "badge": "وسم الشريحة (مثلاً: القاعدة / هل تعلم / القصة)",
           "title": "عنوان الشريحة",
           "content_html": "المحتوى الرئيسي بتنسيق HTML بسيط (استخدم <b> للتركيز)",
           "note": "ملاحظة أو مثال توضيحي"
         }},
-        ... (إجمالي 5 شرائح بالضبط)
+        {{
+          "slide_number": 2,
+          "badge": "وسم الشريحة",
+          "title": "عنوان الشريحة",
+          "content_html": "المحتوى الرئيسي",
+          "note": "ملاحظة"
+        }},
+        {{
+          "slide_number": 3,
+          "badge": "وسم الشريحة",
+          "title": "عنوان الشريحة",
+          "content_html": "المحتوى الرئيسي",
+          "note": "ملاحظة"
+        }},
+        {{
+          "slide_number": 4,
+          "badge": "وسم الشريحة",
+          "title": "عنوان الشريحة",
+          "content_html": "المحتوى الرئيسي",
+          "note": "ملاحظة"
+        }},
+        {{
+          "slide_number": 5,
+          "badge": "وسم الشريحة",
+          "title": "عنوان الشريحة",
+          "content_html": "المحتوى الرئيسي",
+          "note": "ملاحظة"
+        }}
       ],
       "caption": "الكابشن الكامل للبوست باللغة العربية مع شرح مبسط وهاشتاغات عراقية وتعليمية مناسبة"
     }}
     """
 
-    url = f"[https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=](https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=){GEMINI_API_KEY}"
-    headers = {"Content-Type": "application/json"}
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY
+    }
     data = {"contents": [{"parts": [{"text": prompt}]}]}
 
     response = requests.post(url, json=data, headers=headers, timeout=30)
@@ -88,11 +118,9 @@ def generate_content_with_gemini():
     res_json = response.json()
     raw_text = res_json['candidates'][0]['content']['parts'][0]['text']
     
-    # تنظيف النص واستخراج الـ JSON
     cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
     content = json.loads(cleaned_text)
 
-    # حفظ الموضوع في السجل لمنع التكرار
     history.append(content["topic_title"])
     save_history(history)
 
@@ -101,7 +129,6 @@ def generate_content_with_gemini():
 def render_slides_to_images(content):
     theme = random.choice(COLOR_THEMES)
     
-    # حفظ الكابشن
     (OUTPUT_DIR / "caption.txt").write_text(content["caption"], encoding="utf-8")
 
     with sync_playwright() as p:
@@ -114,7 +141,7 @@ def render_slides_to_images(content):
             <html lang="ar" dir="rtl">
             <head>
                 <meta charset="UTF-8">
-                <link href="[https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap](https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap)" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
                 <style>
                     * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }}
                     body {{
