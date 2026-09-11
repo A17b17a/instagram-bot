@@ -10,7 +10,6 @@ OUTPUT_DIR = Path("daily_post")
 OUTPUT_DIR.mkdir(exist_ok=True)
 HISTORY_FILE = Path("used_topics.json")
 
-# التصنيفات المطلوبة للتنويع اليومي
 CATEGORIES = [
     "منهج السادس إعدادي (العراق - قواعد، قطع، إسقاطات، أو إملاء)",
     "منهج الثالث متوسط (العراق - قطع، قواعد، أو مفردات)",
@@ -25,11 +24,11 @@ CATEGORIES = [
 ]
 
 COLOR_THEMES = [
-    {"bg": "#FFF5F5", "card_bg": "#FFFFFF", "primary": "#E53E3E", "text": "#2D3748"},
-    {"bg": "#F0FFF4", "card_bg": "#FFFFFF", "primary": "#38A169", "text": "#2D3748"},
-    {"bg": "#EBF8FF", "card_bg": "#FFFFFF", "primary": "#3182CE", "text": "#2D3748"},
-    {"bg": "#FAF5FF", "card_bg": "#FFFFFF", "primary": "#805AD5", "text": "#2D3748"},
-    {"bg": "#FFFAF0", "card_bg": "#FFFFFF", "primary": "#DD6B20", "text": "#2D3748"}
+    {"bg": "#F8FAFC", "card_bg": "#FFFFFF", "primary": "#2563EB", "accent": "#EFF6FF", "text": "#1E293B", "border": "#3B82F6"},
+    {"bg": "#FDF2F2", "card_bg": "#FFFFFF", "primary": "#DC2626", "accent": "#FEF2F2", "text": "#1E293B", "border": "#EF4444"},
+    {"bg": "#F0FDF4", "card_bg": "#FFFFFF", "primary": "#16A34A", "accent": "#F0FDF4", "text": "#1E293B", "border": "#22C55E"},
+    {"bg": "#FAF5FF", "card_bg": "#FFFFFF", "primary": "#9333EA", "accent": "#FAF5FF", "text": "#1E293B", "border": "#A855F7"},
+    {"bg": "#FFFBEB", "card_bg": "#FFFFFF", "primary": "#D97706", "accent": "#FFFBEB", "text": "#1E293B", "border": "#F59E0B"}
 ]
 
 def load_history():
@@ -49,15 +48,9 @@ def get_available_models(headers):
         res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
             models = res.json().get("models", [])
-            valid_models = []
-            for m in models:
-                if "generateContent" in m.get("supportedGenerationMethods", []):
-                    valid_models.append(m["name"].replace("models/", ""))
-            return valid_models
-        else:
-            print(f"⚠️ Could not list models (Status {res.status_code}): {res.text}")
-    except Exception as e:
-        print(f"⚠️ Exception listing models: {e}")
+            return [m["name"].replace("models/", "") for m in models if "generateContent" in m.get("supportedGenerationMethods", [])]
+    except Exception:
+        pass
     return []
 
 def generate_content_with_gemini():
@@ -69,10 +62,8 @@ def generate_content_with_gemini():
         "x-goog-api-key": GEMINI_API_KEY
     }
 
-    # جلب النماذج المدعومة والمتاحة لمفتاحك تلقائياً
     available_models = get_available_models(headers)
-    fallback_models = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash"]
-    
+    fallback_models = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
     models_to_try = [m for m in available_models if "flash" in m] + available_models + fallback_models
     seen = set()
     models_to_try = [m for m in models_to_try if not (m in seen or seen.add(m))]
@@ -81,55 +72,60 @@ def generate_content_with_gemini():
     category = random.choice(CATEGORIES)
 
     prompt = f"""
-    أنت خبير في تدريس اللغة الإنجليزية وصانع محتوى تعليمي محترف.
-    قم بإنشاء محتوى لكاروسيل إنستغرام (5 شرائح) من التصنيف التالي:
-    التصنيف المطلوب: {category}
+    أنت أستاذ وخبير تدريس لغة إنجليزية محترف جداً وصانع محتوى تعليمي.
+    قم بإنشاء محتوى لكاروسيل إنستغرام (5 شرائح) للتصنيف التالية:
+    التصنيف: {category}
 
-    المواضيع السابقة التي تم استخدامها (يمنع تكرارها كلياً):
+    المواضيع السابقة (يمنع التكرار):
     {json.dumps(history, ensure_ascii=False)}
 
-    المطلوب رد بصيغة JSON فقط دون أي نصوص إضافية أو markdown:
+    شروط صارمة للمحتوى والإملاء:
+    1. اكتب بلغة عربية فصيحة ومفهومة وسليمة 100% بدون أي أخطاء إملائية أو مطبعية أو كلمات مبتورة.
+    2. تأكد من أن كل العبارات الإنجليزية مكتوبة بشكل صحيح وموضوعة داخل وسم <span dir="ltr"> الجملة الإنجليزية </span> لكي لا تختلط باللغة العربية.
+    3. الرد يكون JSON فقط بدون أية نصوص خارجية أو markdown.
+
+    شكل الـ JSON المطلوب:
     {{
-      "topic_title": "عنوان الموضوع الرئيسي المختصر",
+      "topic_title": "عنوان الموضوع المختصر والواضح",
       "category_name": "{category}",
       "slides": [
         {{
           "slide_number": 1,
-          "badge": "وسم الشريحة (مثلاً: القاعدة / هل تعلم / القصة)",
-          "title": "عنوان الشريحة",
-          "content_html": "المحتوى الرئيسي بتنسيق HTML بسيط (استخدم <b> للتركيز)",
-          "note": "ملاحظة أو مثال توضيحي"
+          "badge": "وسم الشريحة (مثلاً: تعبير شائع / قاعدة / سؤال)",
+          "title": "العنوان الرئيسي للشريحة",
+          "content_html": "المحتوى الشارح مع وضع الكلمات المفتاحية بين <b> والعبارات الإنجليزية داخل <span dir='ltr'>...</span>",
+          "note": "مثال توضيحي أو ترجمة معتمدة"
         }},
         {{
           "slide_number": 2,
           "badge": "وسم الشريحة",
           "title": "عنوان الشريحة",
-          "content_html": "المحتوى الرئيسي",
-          "note": "ملاحظة"
+          "content_html": "المحتوى",
+          "note": "ملاحظة أو مثال"
         }},
         {{
           "slide_number": 3,
           "badge": "وسم الشريحة",
           "title": "عنوان الشريحة",
-          "content_html": "المحتوى الرئيسي",
-          "note": "ملاحظة"
+          "content_html": "المحتوى",
+          "note": "ملاحظة أو مثال"
         }},
         {{
           "slide_number": 4,
           "badge": "وسم الشريحة",
           "title": "عنوان الشريحة",
-          "content_html": "المحتوى الرئيسي",
-          "note": "ملاحظة"
+          "content_html": "المحتوى",
+          "note": "ملاحظة أو مثال"
         }},
         {{
           "slide_number": 5,
-          "badge": "وسم الشريحة",
-          "title": "عنوان الشريحة",
-          "content_html": "المحتوى الرئيسي",
-          "note": "ملاحظة"
+          "badge": "تحدي التفاعل",
+          "title": "دورك تجاوب!",
+          "content_html": "سؤال أو اختريات للتفاعل بالتعليقات",
+          "note": "احفظ البوست حتى ترجعله وشاركه ويا أصدقائك!"
         }}
       ],
-      "caption": "الكابشن الكامل للبوست باللغة العربية مع شرح مبسط وهاشتاغات عراقية وتعليمية مناسبة"
+      "caption": "الكابشن الكامل للبوست باللغة العربية مع شرح مبسط وهاشتاغات تعليمية وعراقية مناسبة"
     }}
     """
 
@@ -142,17 +138,15 @@ def generate_content_with_gemini():
         try:
             res = requests.post(url, json=payload, headers=headers, timeout=30)
             if res.status_code == 200:
-                res_json = res.json()
-                raw_text = res_json['candidates'][0]['content']['parts'][0]['text']
-                print(f"✅ Successfully generated using model: {model}")
+                raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
                 break
             else:
-                last_error = f"Model {model} -> Status {res.status_code}: {res.text}"
+                last_error = f"Model {model} -> Status {res.status_code}"
         except Exception as e:
-            last_error = f"Model {model} -> Exception: {e}"
+            last_error = str(e)
 
     if not raw_text:
-        raise Exception(f"❌ Failed to generate content via Gemini API. Last error: {last_error}")
+        raise Exception(f"❌ Failed to generate content via Gemini API: {last_error}")
 
     cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
     content = json.loads(cleaned_text)
@@ -177,27 +171,67 @@ def render_slides_to_images(content):
             <html lang="ar" dir="rtl">
             <head>
                 <meta charset="UTF-8">
-                <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700;900&display=swap" rel="stylesheet">
+                <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&family=Poppins:wght@500;700&display=swap" rel="stylesheet">
                 <style>
-                    * {{ box-sizing: border-box; margin: 0; padding: 0; font-family: 'Cairo', sans-serif; }}
+                    * {{ box-sizing: border-box; margin: 0; padding: 0; }}
                     body {{
                         width: 1080px; height: 1080px;
                         background-color: {theme['bg']};
+                        font-family: 'Cairo', sans-serif;
                         display: flex; flex-direction: column;
-                        justify-content: space-between; padding: 80px 60px;
+                        justify-content: space-between;
+                        padding: 70px;
                     }}
-                    .header {{ display: flex; justify-content: space-between; align-items: center; }}
-                    .badge {{ background: {theme['primary']}; color: white; padding: 10px 25px; border-radius: 30px; font-size: 24px; font-weight: bold; }}
-                    .slide-num {{ font-size: 28px; color: #718096; font-weight: bold; }}
+                    .header {{
+                        display: flex; justify-content: space-between; align-items: center;
+                    }}
+                    .badge {{
+                        background: {theme['primary']}; color: #FFFFFF;
+                        padding: 12px 28px; border-radius: 50px;
+                        font-size: 24px; font-weight: 700;
+                    }}
+                    .slide-num {{
+                        font-size: 26px; color: #64748B; font-weight: 700;
+                        font-family: 'Poppins', sans-serif;
+                    }}
                     .card {{
-                        background: {theme['card_bg']}; border-radius: 25px; padding: 50px;
-                        box-shadow: 0 10px 30px rgba(0,0,0,0.05); border-right: 12px solid {theme['primary']};
-                        flex-grow: 1; margin: 40px 0; display: flex; flex-direction: column; justify-content: center;
+                        background: {theme['card_bg']};
+                        border-radius: 32px;
+                        padding: 60px 50px;
+                        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.06);
+                        border-right: 12px solid {theme['border']};
+                        flex-grow: 1;
+                        margin: 35px 0;
+                        display: flex; flex-direction: column; justify-content: center;
+                        gap: 25px;
                     }}
-                    .title {{ font-size: 42px; color: {theme['primary']}; margin-bottom: 25px; font-weight: 900; }}
-                    .content {{ font-size: 32px; color: {theme['text']}; line-height: 1.8; }}
-                    .note {{ font-size: 26px; color: #4A5568; background: #EDF2F7; padding: 20px; border-radius: 15px; margin-top: 25px; }}
-                    .footer {{ text-align: center; font-size: 24px; color: #A0AEC0; font-weight: bold; }}
+                    .title {{
+                        font-size: 44px; color: {theme['primary']};
+                        font-weight: 900; line-height: 1.3;
+                    }}
+                    .content {{
+                        font-size: 32px; color: {theme['text']};
+                        line-height: 1.8; font-weight: 600;
+                    }}
+                    .content b {{
+                        color: {theme['primary']};
+                    }}
+                    .content span[dir="ltr"], [dir="ltr"] {{
+                        font-family: 'Poppins', sans-serif;
+                        direction: ltr; display: inline-block;
+                        color: #0F172A; font-weight: 700;
+                    }}
+                    .note {{
+                        font-size: 26px; color: #334155;
+                        background: {theme['accent']};
+                        padding: 22px 28px; border-radius: 20px;
+                        border-left: 6px solid {theme['border']};
+                        line-height: 1.6; font-weight: 600;
+                    }}
+                    .footer {{
+                        text-align: center; font-size: 26px; color: #94A3B8;
+                        font-weight: 700; letter-spacing: 0.5px;
+                    }}
                 </style>
             </head>
             <body>
@@ -221,7 +255,7 @@ def render_slides_to_images(content):
         browser.close()
 
 if __name__ == "__main__":
-    print("🤖 Requesting new unique topic from Gemini...")
+    print("🤖 Generating formatted carousel content with Gemini...")
     data = generate_content_with_gemini()
-    print(f"✅ Generated Topic: {data['topic_title']} [{data['category_name']}]")
+    print(f"✅ Topic Generated: {data['topic_title']} [{data['category_name']}]")
     render_slides_to_images(data)
