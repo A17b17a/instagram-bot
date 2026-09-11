@@ -45,6 +45,7 @@ PROMPT = f"""
 قم بتوليد كود JSON فقط وحصرياً بالهيكلية التالية بدون أي نص خارجي:
 
 {{
+  "caption": "اكتب هنا كابشن جذاب ومشوق للمنشور باللغة العربية مع إيموجيات وهاشتاقات مناسبة لطلاب السادس إعدادي مثل #سادس_إعدادي #انكليزي_سادس #وزاريات #العراق",
   "slides": [
     {{
       "badge": "بادج الصنف",
@@ -145,14 +146,29 @@ def create_slide_image(slide_data, index, output_dir="daily_post"):
     img.save(file_path)
     return file_path
 
+def save_caption(caption_text, output_dir="daily_post"):
+    os.makedirs(output_dir, exist_ok=True)
+    file_path = os.path.join(output_dir, "caption.txt")
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(caption_text)
+    print(f"تم حفظ الكابشن في {file_path}")
+
 def main():
     print(f"جاري التوليد لصنف [{selected_category}] - [{selected_unit}]...")
     data = generate_content()
     slides = data.get("slides", [])
     
+    # حفظ صور الشرائح
     for idx, slide in enumerate(slides):
         create_slide_image(slide, idx, output_dir="daily_post")
     print("تم إنشاء الشرائح بنجاح في مجلد daily_post.")
+
+    # حفظ الكابشن
+    caption_text = data.get("caption")
+    if not caption_text:
+        caption_text = f"📚 درس اليوم: {selected_category} - {selected_unit}\n\nتابع الحساب للمزيد من الدروس والتلخيصات اليومية! ✨\n\n#سادس_إعدادي #انكليزي_سادس #وزاريات #العراق"
+    
+    save_caption(caption_text, output_dir="daily_post")
 
 if __name__ == "__main__":
     main()
