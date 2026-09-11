@@ -1,93 +1,94 @@
 import os
 import json
+import time
 from pathlib import Path
 from instagrapi import Client
-from instagrapi.types import StoryMedia
 
-# إصلاح خلل خاصية extra في StoryMedia لضمان عمل الستوري
-StoryMedia.extra = property(lambda self: {})
+USERNAME     = os.getenv("INSTAGRAM_USERNAME")
+PASSWORD     = os.getenv("INSTAGRAM_PASSWORD")
+SESSION_DATA = os.getenv("INSTAGRAM_SESSION_JSON")
 
-USERNAME = os.getenv("INSTAGRAM_USERNAME") or os.getenv("IG_USERNAME", "")
-PASSWORD = os.getenv("INSTAGRAM_PASSWORD") or os.getenv("IG_PASSWORD", "")
-SESSION_ENV = os.getenv("INSTAGRAM_SESSION_JSON", "")
+OUTPUT_DIR   = Path("daily_post")
+SESSION_FILE = Path("session.json")
 
-SESSION_FILE = Path("ig_session.json")
-DAILY_POST_DIR = Path("daily_post")
 
-def main():
-    if not DAILY_POST_DIR.exists():
-        print("❌ مجلد daily_post غير موجود!")
-        return
-
-    slides = sorted([str(p) for p in DAILY_POST_DIR.glob("slide_*.png")])
-    caption_file = DAILY_POST_DIR / "caption.txt"
-    caption = caption_file.read_text(encoding="utf-8") if caption_file.exists() else ""
-
+# ─────────────────────────────────────────────────────────────
+# تسجيل الدخول
+# ─────────────────────────────────────────────────────────────
+def get_client() -> Client:
+    """
+    أولوية:
+    1. SESSION من GitHub Secret  (أسرع + أكثر أماناً من CAPTCHA)
+    2. session.json محلي         (للتطوير على الحاسوب)
+    3. تسجيل دخول بالباسورد      (آخر خيار)
+    """
     cl = Client()
     
-    # تجاوز رابط التتبع المعطل من إنستغرام
+    # تعطيل رابط QE Expose القديم لتجنب خطأ 404
     cl.expose = lambda *args, **kwargs: True
 
-    logged_in = False
-
-    # 1️⃣ تسجيل الدخول عبر الجلسة
-    if SESSION_ENV.strip():
+    if SESSION_DATA:
         try:
-            session_str = SESSION_ENV.strip()
-            if not session_str.startswith("{"):
-                print("🔄 جاري تسجيل الدخول باستخدام sessionid...")
-                cl.login_by_sessionid(session_str)
-                logged_in = True
-            else:
-                print("🔄 جاري تحميل الجلسة من متغير INSTAGRAM_SESSION_JSON...")
-                session_data = json.loads(session_str)
-                with open(SESSION_FILE, "w", encoding="utf-8") as f:
-                    json.dump(session_data, f)
-                cl.load_settings(SESSION_FILE)
-                cl.login(USERNAME, PASSWORD)
-                logged_in = True
-            print("✅ تم تسجيل الدخول بنجاح عبر الجلسة!")
+            cl.set_settings(json.loads(SESSION_DATA))
+            cl.login(USERNAME, PASSWORD)
+            print("🔑 Logged in via GitHub Secret session.")
+            return cl
         except Exception as e:
-            print(f"⚠️ فشل تسجيل الدخول بمتغير الجلسة: {e}")
+            print(f"⚠️  Secret session failed ({e}) — trying password login.")
 
-    # 2️⃣ تسجيل الدخول بملف الجلسة
-    if not logged_in and SESSION_FILE.exists():
+    if SESSION_FILE.exists():
         try:
-            print("🔄 جاري تحميل الجلسة من ملف ig_session.json...")
             cl.load_settings(SESSION_FILE)
             cl.login(USERNAME, PASSWORD)
-            logged_in = True
-            print("✅ تم تسجيل الدخول عبر ملف الجلسة بنجاح!")
+            print("🔑 Logged in via local session.json.")
+            return cl
         except Exception as e:
-            print(f"⚠️ فشل تحميل ملف الجلسة: {e}")
+            print(f"⚠️  Local session failed ({e}) — trying password login.")
 
-    # 3️⃣ تسجيل الدخول المباشر
-    if not logged_in:
-        print("🔄 محاولة تسجيل الدخول المباشر بكلمة السر...")
-        cl.login(USERNAME, PASSWORD)
+    print("🔐 Logging in with username & password...")
+    cl.login(USERNAME, PASSWORD)
+    return cl
 
-    # 📸 نشر الكاروسيل
-    print(f"📸 جاري نشر الكاروسيل ({len(slides)} شرائح)...")
-    post_media = cl.album_upload(paths=slides, caption=caption)
-    print(f"✅ تم نشر الكاروسيل بنجاح! ID: {post_media.pk}")
 
-    # 📲 نشر الستوري التفاعلي
-    print("📲 جاري نشر الستوري مع ملصق التوجيه التفاعلي...")
-    try:
-        post_sticker = StoryMedia(
-            media_pk=post_media.pk,
-            x=0.5, y=0.5, width=0.6, height=0.6
-        )
-        cl.photo_upload_to_story(path=slides[0], stickers=[post_sticker])
-        print("🎉 تم نشر الستوري بنجاح مع زر التوجيه للمنشور!")
-    except Exception as e:
-        print(f"⚠️ تعذر نشر الستوري بالملصق التفاعلي: {e}")
-        # محاولة نشر الستوري كصورة عادية إذا فشل الملصق
-        try:
-            cl.photo_upload_to_story(path=slides[0])
-            print("🎉 تم نشر الستوري كصورة عادية بنجاح!")
-        except Exception as err:
-            print(f"❌ فشل نشر الستوري بالكامل: {err}")
+# ─────────────────────────────────────────────────────────────
+# حفظ الـ session في ملف (يلتقطه الـ workflow لاحقاً)
+# ─────────────────────────────────────────────────────────────
+def save_session(cl: Client):
+    session_dict = cl.get_settings()
+    SESSION_FILE.write_text(
+        json.dumps(session_dict, ensure_ascii=False, indent=2),
+        encoding="utf-8"
+    )
+    print(f"💾 Session saved → {SESSION_FILE}")
 
-if __name__ == "__main__":
-    main()
+
+# ─────────────────────────────────────────────────────────────
+# النشر الرئيسي
+# ─────────────────────────────────────────────────────────────
+def upload_daily_carousel():
+    if not USERNAME or not PASSWORD:
+        raise ValueError("❌ INSTAGRAM_USERNAME or INSTAGRAM_PASSWORD not set!")
+
+    cl = get_client()
+
+    images = sorted(str(p) for p in OUTPUT_DIR.glob("slide_*.png"))
+    caption_path = OUTPUT_DIR / "caption.txt"
+
+    if not images:
+        raise FileNotFoundError("❌ No slide_*.png found in daily_post/")
+    if not caption_path.exists():
+        raise FileNotFoundError("❌ caption.txt not found in daily_post/")
+
+    caption = caption_path.read_text(encoding="utf-8")
+    print(f"⏳ Uploading {len(images)} slides to Instagram…")
+    time.sleep(3)   # تأخير بسيط لتفادي rate-limit
+
+    media = cl.album_upload(images, caption=caption)
+    print(f"🚀 Upload complete! Media PK: {media.pk}")
+
+    # احفظ الـ session المحدَّث ليلتقطه الـ workflow
+    save_session(cl)
+
+
+if name == "main":
+    upload_daily_carousel()
