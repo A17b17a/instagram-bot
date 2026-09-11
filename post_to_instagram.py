@@ -4,9 +4,9 @@ import time
 from pathlib import Path
 from instagrapi import Client
 
-USERNAME         = os.getenv("INSTAGRAM_USERNAME")
-PASSWORD         = os.getenv("INSTAGRAM_PASSWORD")
-SESSION_DATA     = os.getenv("INSTAGRAM_SESSION_JSON")
+USERNAME     = os.getenv("INSTAGRAM_USERNAME")
+PASSWORD     = os.getenv("INSTAGRAM_PASSWORD")
+SESSION_DATA = os.getenv("INSTAGRAM_SESSION_JSON")
 
 OUTPUT_DIR   = Path("daily_post")
 SESSION_FILE = Path("session.json")
@@ -23,6 +23,9 @@ def get_client() -> Client:
     3. تسجيل دخول بالباسورد      (آخر خيار)
     """
     cl = Client()
+    
+    # تعطيل رابط QE Expose القديم لتجنب خطأ 404
+    cl.expose = lambda *args, **kwargs: True
 
     if SESSION_DATA:
         try:
