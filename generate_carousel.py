@@ -43,13 +43,43 @@ def load_history():
 def save_history(history):
     HISTORY_FILE.write_text(json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8")
 
+def get_available_models(headers):
+    url = "https://generativelanguage.googleapis.com/v1beta/models"
+    try:
+        res = requests.get(url, headers=headers, timeout=15)
+        if res.status_code == 200:
+            models = res.json().get("models", [])
+            valid_models = []
+            for m in models:
+                if "generateContent" in m.get("supportedGenerationMethods", []):
+                    valid_models.append(m["name"].replace("models/", ""))
+            return valid_models
+        else:
+            print(f"⚠️ Could not list models (Status {res.status_code}): {res.text}")
+    except Exception as e:
+        print(f"⚠️ Exception listing models: {e}")
+    return []
+
 def generate_content_with_gemini():
     if not GEMINI_API_KEY:
         raise ValueError("❌ GEMINI_API_KEY غير موجود في Secrets!")
 
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY
+    }
+
+    # جلب النماذج المدعومة والمتاحة لمفتاحك تلقائياً
+    available_models = get_available_models(headers)
+    fallback_models = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash-latest", "gemini-1.5-flash"]
+    
+    models_to_try = [m for m in available_models if "flash" in m] + available_models + fallback_models
+    seen = set()
+    models_to_try = [m for m in models_to_try if not (m in seen or seen.add(m))]
+
     history = load_history()
     category = random.choice(CATEGORIES)
-    
+
     prompt = f"""
     أنت خبير في تدريس اللغة الإنجليزية وصانع محتوى تعليمي محترف.
     قم بإنشاء محتوى لكاروسيل إنستغرام (5 شرائح) من التصنيف التالي:
@@ -103,14 +133,7 @@ def generate_content_with_gemini():
     }}
     """
 
-    headers = {
-        "Content-Type": "application/json",
-        "x-goog-api-key": GEMINI_API_KEY
-    }
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
-
-    # قائمة بالنماذج المتاحة عبر API المباشر
-    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
     raw_text = None
     last_error = None
 
@@ -121,14 +144,15 @@ def generate_content_with_gemini():
             if res.status_code == 200:
                 res_json = res.json()
                 raw_text = res_json['candidates'][0]['content']['parts'][0]['text']
+                print(f"✅ Successfully generated using model: {model}")
                 break
             else:
-                last_error = f"Status {res.status_code}: {res.text}"
+                last_error = f"Model {model} -> Status {res.status_code}: {res.text}"
         except Exception as e:
-            last_error = str(e)
+            last_error = f"Model {model} -> Exception: {e}"
 
     if not raw_text:
-        raise Exception(f"❌ Failed to generate content via Gemini API: {last_error}")
+        raise Exception(f"❌ Failed to generate content via Gemini API. Last error: {last_error}")
 
     cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
     content = json.loads(cleaned_text)
