@@ -4,6 +4,10 @@ from pathlib import Path
 from instagrapi import Client
 from instagrapi.types import StoryMedia
 
+# إصلاح توافقية خاصية extra في StoryMedia لتجنب خطأ AttributeError
+if not hasattr(StoryMedia, "extra"):
+    setattr(StoryMedia, "extra", None)
+
 USERNAME = os.getenv("INSTAGRAM_USERNAME") or os.getenv("IG_USERNAME", "")
 PASSWORD = os.getenv("INSTAGRAM_PASSWORD") or os.getenv("IG_PASSWORD", "")
 SESSION_ENV = os.getenv("INSTAGRAM_SESSION_JSON", "")
@@ -22,7 +26,7 @@ def main():
 
     cl = Client()
     
-    # تجاوز استدعاء رابط التتبع المعطل من إنستغرام لمنع خطأ 404
+    # تجاوز استدعاء رابط التتبع المعطل
     cl.expose = lambda *args, **kwargs: True
 
     logged_in = False
@@ -70,12 +74,15 @@ def main():
 
     # 📲 نشر الستوري التفاعلي
     print("📲 جاري نشر الستوري مع ملصق التوجيه التفاعلي...")
-    post_sticker = StoryMedia(
-        media_pk=post_media.pk,
-        x=0.5, y=0.5, width=0.7, height=0.7
-    )
-    cl.photo_upload_to_story(path=slides[0], stickers=[post_sticker])
-    print("🎉 تم نشر الستوري بنجاح مع زر التوجيه للمنشور!")
+    try:
+        post_sticker = StoryMedia(
+            media_pk=post_media.pk,
+            x=0.5, y=0.5, width=0.7, height=0.7
+        )
+        cl.photo_upload_to_story(path=slides[0], stickers=[post_sticker])
+        print("🎉 تم نشر الستوري بنجاح مع زر التوجيه للمنشور!")
+    except Exception as e:
+        print(f"⚠️ تعذر رفع الستوري بشكل تفاعلي: {e}")
 
 if __name__ == "__main__":
     main()
