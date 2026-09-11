@@ -1,70 +1,80 @@
 import os
+import json
 from pathlib import Path
 from instagrapi import Client
 from instagrapi.types import StoryMedia
 
-# ════════════════════════════════════════════════════════════════
-# إعدادات الحساب والمجلدات
-# ════════════════════════════════════════════════════════════════
-USERNAME = os.getenv("IG_USERNAME", "ahmed.hayali.iq")
-PASSWORD = os.getenv("IG_PASSWORD", "Ah.mu2086!.ah")
+# دعم أسماء المتغيرات المختلفة في GitHub Secrets
+USERNAME = os.getenv("INSTAGRAM_USERNAME") or os.getenv("IG_USERNAME", "")
+PASSWORD = os.getenv("INSTAGRAM_PASSWORD") or os.getenv("IG_PASSWORD", "")
+SESSION_ENV = os.getenv("INSTAGRAM_SESSION_JSON", "")
 
+SESSION_FILE = Path("ig_session.json")
 DAILY_POST_DIR = Path("daily_post")
 
 def main():
     if not DAILY_POST_DIR.exists():
-        print("❌ مجلد daily_post غير موجود! قم بتشغيل سكريبت إنشاء التصاميم أولاً.")
+        print("❌ مجلد daily_post غير موجود!")
         return
 
-    # جلب جميع الشرائح المجهزة مرتبة
     slides = sorted([str(p) for p in DAILY_POST_DIR.glob("slide_*.png")])
     caption_file = DAILY_POST_DIR / "caption.txt"
-    
-    if not slides:
-        print("❌ لم يتم العثور على أي صور داخل مجلد daily_post")
-        return
-
     caption = caption_file.read_text(encoding="utf-8") if caption_file.exists() else ""
 
-    print(f"🔄 جاري تسجيل الدخول إلى حساب: {USERNAME}...")
     cl = Client()
-    
-    # إدارة الجلسة لمنع الحظر
-    session_file = Path("ig_session.json")
-    if session_file.exists():
-        cl.load_settings(session_file)
-        cl.login(USERNAME, PASSWORD)
-    else:
-        cl.login(USERNAME, PASSWORD)
-        cl.dump_settings(session_file)
+    logged_in = False
 
-    # 1️⃣ نشر المنشور الرئيسي (Carousel)
+    # 1️⃣ استخدام الجلسة الممررة من GitHub Secrets
+    if SESSION_ENV.strip():
+        try:
+            session_str = SESSION_ENV.strip()
+            # إذا كان المدخل هو sessionid فقط (سلسلة نصية)
+            if not session_str.startswith("{"):
+                print("🔄 جاري تسجيل الدخول باستخدام sessionid...")
+                cl.login_by_sessionid(session_str)
+                logged_in = True
+            else:
+                # إذا كان المدخل عبارة عن JSON كامل
+                print("🔄 جاري تحميل الجلسة من متغير INSTAGRAM_SESSION_JSON...")
+                session_data = json.loads(session_str)
+                with open(SESSION_FILE, "w", encoding="utf-8") as f:
+                    json.dump(session_data, f)
+                cl.load_settings(SESSION_FILE)
+                cl.login(USERNAME, PASSWORD)
+                logged_in = True
+            print("✅ تم تسجيل الدخول بنجاح عبر الجلسة!")
+        except Exception as e:
+            print(f"⚠️ فشل تسجيل الدخول بمتغير الجلسة: {e}")
+
+    # 2️⃣ استخدام ملف ig_session.json إن وجد في المستودع
+    if not logged_in and SESSION_FILE.exists():
+        try:
+            print("🔄 جاري تحميل الجلسة من ملف ig_session.json...")
+            cl.load_settings(SESSION_FILE)
+            cl.login(USERNAME, PASSWORD)
+            logged_in = True
+            print("✅ تم تسجيل الدخول عبر ملف الجلسة بنجاح!")
+        except Exception as e:
+            print(f"⚠️ فشل تحميل ملف الجلسة: {e}")
+
+    # 3️⃣ محاولة الدخول التقليدية (خطة بديلة)
+    if not logged_in:
+        print("🔄 محاولة تسجيل الدخول المباشر بكلمة السر...")
+        cl.login(USERNAME, PASSWORD)
+
+    # 📸 نشر الكاروسيل
     print(f"📸 جاري نشر الكاروسيل ({len(slides)} شرائح)...")
-    post_media = cl.album_upload(
-        paths=slides,
-        caption=caption
-    )
-    print(f"✅ تم نشر المنشور بنجاح! ID المنشور: {post_media.pk}")
+    post_media = cl.album_upload(paths=slides, caption=caption)
+    print(f"✅ تم نشر الكاروسيل بنجاح! ID: {post_media.pk}")
 
-    # 2️⃣ تجهيز ملصق المشاركة التفاعلي الموجه للمنشور
-    print("📲 جاري إنشاء الستوري وإضافة ملصق التوجيه التفاعلي للمنشور...")
-    
-    # ملصق يحيل المتابع مباشرة للمنشور
+    # 📲 نشر الستوري التفاعلي
+    print("📲 جاري نشر الستوري مع ملصق التوجيه التفاعلي...")
     post_sticker = StoryMedia(
-        media_pk=post_media.pk,  # ربط الستوري بمعرف المنشور الجديد
-        x=0.5,                   # الموضع الأفقي (المنتصف)
-        y=0.5,                   # الموضع العمودي (المنتصف)
-        width=0.7,               # حجم الملصق بالنسبة للشاشة
-        height=0.7
+        media_pk=post_media.pk,
+        x=0.5, y=0.5, width=0.7, height=0.7
     )
-
-    # رفع الشريحة الأولى كخلفية للستوري مع دمج الملصق التفاعلي فوقها
-    cl.photo_upload_to_story(
-        path=slides[0],
-        stickers=[post_sticker]
-    )
-    
-    print("🎉 تم نشر الستوري بنجاح! عند الضغط عليها ستنقل المتابع فوراً إلى البوست.")
+    cl.photo_upload_to_story(path=slides[0], stickers=[post_sticker])
+    print("🎉 تم نشر الستوري بنجاح مع زر التوجيه للمنشور!")
 
 if __name__ == "__main__":
     main()
