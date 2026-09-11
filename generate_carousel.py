@@ -6,12 +6,23 @@ from pathlib import Path
 from playwright.async_api import async_playwright
 
 OUTPUT_DIR = Path("daily_post")
-# ✅ تغيير: HISTORY_FILE يُقرأ من متغير بيئي أو يُحفظ محلياً
 HISTORY_FILE = Path(os.getenv("HISTORY_FILE", "used_topics.json"))
 SIZE = 1080
 
 TEACHER_NAME = "أحمد الحيالي"
 TEACHER_HANDLE = "@Ahmed.hayali.iq"
+
+# ─────────────────────────────────────────────────────────────
+# قائمة الهاشتاقات المستهدفة للعراق والمناهج الدراسية
+# ─────────────────────────────────────────────────────────────
+HASHTAGS = """
+
+.
+.
+#تعلم_الانكليزي #تعلم_الانجليزي #تعلم_الانجليزية #تعلم_الانكليزية #اللغة_الانكليزية #مفردات_انكليزية
+#السادس_الاعدادي #الثالث_المتوسط #الاول_المتوسط #السادس_الابتدائي #طلاب_العراق #وزاريات
+#2026 #2027 #العراق #بغداد #دراسة #امتحانات #اكسبلور #أحمد_الحيالي
+"""
 
 THEMES = [
     {
@@ -74,7 +85,7 @@ THEMES = [
 LOCAL_TOPICS = [
     {
         "topic": "قصة قصيرة ومعنى 📖 | The Wise Old Man",
-        "caption": "📌 قصة قصيرة ممتعة لتقوية القراءة والاستماع والكلمات! 📖\n\nاقرأ القصة وتعلّم مفردات جديدة بسهولة.\n\nاحفظ البطاقات عندك للمراجعة! 📌\n#قصص_إنجليزية #تعلم_الإنجليزي #مفردات #أحمد_الحيالي",
+        "caption": "📌 قصة قصيرة ممتعة لتقوية القراءة والاستماع والكلمات! 📖\n\nاقرأ القصة وتعلّم مفردات جديدة بسهولة.\n\nاحفظ البطاقات عندك للمراجعة! 📌",
         "slides": [
             {
                 "badge": "قصة مترجمة 📖",
@@ -100,7 +111,7 @@ LOCAL_TOPICS = [
     },
     {
         "topic": "كلمات متشابهة ⚠️ | Their vs There vs They're",
-        "caption": "📌 الفرق بين ثلاث كلمات تنطق بنفس الشكل تماماً! ⚠️\n\nتوقف عن الخطأ في كتابتها بعد اليوم.\n\nشاركه مع صديقك المهتم! 🎯\n#كلمات_إنجليزية #جرامر #أحمد_الحيالي",
+        "caption": "📌 الفرق بين ثلاث كلمات تنطق بنفس الشكل تماماً! ⚠️\n\nتوقف عن الخطأ في كتابتها بعد اليوم.\n\nشاركه مع صديقك المهتم! 🎯",
         "slides": [
             {
                 "badge": "تشابه باللفظ 🔊",
@@ -110,7 +121,7 @@ LOCAL_TOPICS = [
             {
                 "badge": "الأولى والثانية 📝",
                 "title": "الفرق بالتفصيل 💡",
-                "textAr": "1️⃣ There = هناك (للمكان)\n• Sit over there. (اجلس هناك).\n\n2️⃣ Their = ملكهم (للملكية)\n• Their house is big. (بيتكُم كبير)."
+                "textAr": "1️⃣ There = هناك (للمكان)\n• Sit over there. (اجلس هناك).\n\n2️⃣ Their = ملكهم (للملكية)\n• Their house is big. (بيتهُم كبير)."
             },
             {
                 "badge": "الثالثة 📝",
@@ -126,7 +137,7 @@ LOCAL_TOPICS = [
     },
     {
         "topic": "أهم المعاكسات 🔄 | Antonyms in English",
-        "caption": "📌 ضاعف حصيلتك اللغوية بتعلم الكلمة وعكسها! 🔄\n\nطريقة سريعة لحفظ الكلمات وسهولة استذكارها.\n\nاحفظ المنشور عندك! 📌\n#مفردات_إنجليزية #معاكسات #أحمد_الحيالي",
+        "caption": "📌 ضاعف حصيلتك اللغوية بتعلم الكلمة وعكسها! 🔄\n\nطريقة سريعة لحفظ الكلمات وسهولة استذكارها.\n\nاحفظ المنشور عندك! 📌",
         "slides": [
             {
                 "badge": "المعاكسات 🔄",
@@ -153,7 +164,6 @@ LOCAL_TOPICS = [
 ]
 
 def load_history():
-    # ✅ تغيير: يقرأ من متغير بيئي USED_TOPICS_JSON أولاً (لـ GitHub Actions)
     env_history = os.getenv("USED_TOPICS_JSON")
     if env_history:
         try:
@@ -168,7 +178,6 @@ def load_history():
     return []
 
 def save_history(history):
-    # ✅ تغيير: يحفظ الـ JSON في ملف لتلتقطه GitHub Actions وتحدّث الـ secret
     HISTORY_FILE.write_text(
         json.dumps(history, ensure_ascii=False, indent=2), encoding="utf-8"
     )
@@ -212,8 +221,6 @@ def build_slide_html(teacher_name, teacher_handle, title, badge, text_content,
         f'color:{theme["badge_text"]};">{badge}</div>'
     ) if badge else ''
 
-    # ✅ تغيير: الخط محلي (Noto Sans Arabic) بدلاً من Google Fonts
-    # يُضاف في GitHub Actions كـ apt package ويُشار إليه مباشرة
     return f"""
     <!DOCTYPE html>
     <html dir="rtl" lang="ar">
@@ -285,7 +292,6 @@ async def main():
     total_slides = len(data["slides"])
 
     async with async_playwright() as p:
-        # ✅ تغيير: --no-sandbox ضروري في بيئة GitHub Actions (Linux container)
         browser = await p.chromium.launch(args=["--no-sandbox", "--disable-setuid-sandbox"])
         page = await browser.new_page(viewport={"width": SIZE, "height": SIZE})
 
@@ -301,15 +307,16 @@ async def main():
                 theme=theme
             )
             await page.set_content(html_content, wait_until="domcontentloaded")
-            # ✅ تغيير: domcontentloaded بدلاً من networkidle لأنه لا يوجد اتصال خارجي
             out_path = OUTPUT_DIR / f"slide_{i + 1}.png"
             await page.screenshot(path=str(out_path))
             print(f"✅ Saved: {out_path}")
 
         await browser.close()
 
-    (OUTPUT_DIR / "caption.txt").write_text(data["caption"], encoding="utf-8")
-    print("🎨 All slides generated successfully!")
+    # دمج الكابشن مع الهاشتاقات وحفظها في caption.txt
+    full_caption = f"{data['caption']}\n{HASHTAGS}"
+    (OUTPUT_DIR / "caption.txt").write_text(full_caption, encoding="utf-8")
+    print("🎨 All slides & caption with hashtags generated successfully!")
 
 if __name__ == "__main__":
     asyncio.run(main())
