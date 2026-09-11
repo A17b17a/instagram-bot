@@ -1,8 +1,8 @@
 import os
 import json
 import random
+import requests
 from pathlib import Path
-from google import genai
 from playwright.sync_api import sync_playwright
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -47,8 +47,6 @@ def generate_content_with_gemini():
     if not GEMINI_API_KEY:
         raise ValueError("❌ GEMINI_API_KEY غير موجود في Secrets!")
 
-    # استخدام الحزمة الرسمية الجديدة google-genai
-    client = genai.Client(api_key=GEMINI_API_KEY)
     history = load_history()
     category = random.choice(CATEGORIES)
     
@@ -105,26 +103,32 @@ def generate_content_with_gemini():
     }}
     """
 
-    # تجربة الموديلات الجديدة الحديثة مع الحزمة الجدية
-    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": GEMINI_API_KEY
+    }
+    payload = {"contents": [{"parts": [{"text": prompt}]}]}
+
+    # قائمة بالنماذج المتاحة عبر API المباشر
+    models_to_try = ["gemini-2.0-flash", "gemini-1.5-flash"]
     raw_text = None
     last_error = None
 
-    for model_name in models_to_try:
+    for model in models_to_try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
         try:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=prompt
-            )
-            raw_text = response.text
-            if raw_text:
+            res = requests.post(url, json=payload, headers=headers, timeout=30)
+            if res.status_code == 200:
+                res_json = res.json()
+                raw_text = res_json['candidates'][0]['content']['parts'][0]['text']
                 break
+            else:
+                last_error = f"Status {res.status_code}: {res.text}"
         except Exception as e:
-            last_error = e
-            continue
+            last_error = str(e)
 
     if not raw_text:
-        raise Exception(f"❌ Failed to generate content with Gemini models: {last_error}")
+        raise Exception(f"❌ Failed to generate content via Gemini API: {last_error}")
 
     cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
     content = json.loads(cleaned_text)
