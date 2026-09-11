@@ -74,39 +74,47 @@ PROMPT = f"""
 }}
 """
 
-def get_active_model_name():
-    """جلب اسم النموذج المتاح والفعال تلقائياً من الحساب"""
-    available_models = []
-    for m in genai.list_models():
-        if 'generateContent' in m.supported_generation_methods:
-            available_models.append(m.name)
-            
-    if not available_models:
-        raise Exception("لم يتم العثور على أي نموذج يدعم generateContent في حسابك.")
-        
-    for name in available_models:
-        if 'flash' in name.lower():
-            return name
-            
-    return available_models[0]
+def get_candidate_models():
+    """تجهيز قائمة بالنماذج المتاحة مرتبة حسب الأولوية"""
+    preferred_models = ["gemini-3.6-flash", "gemini-1.5-flash", "gemini-1.5-pro"]
+    
+    dynamic_models = []
+    try:
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                dynamic_models.append(m.name)
+    except Exception as e:
+        print(f"تنبيه: تعذر جلب قائمة النماذج ديناميكياً: {e}")
+
+    # الدمج مع إزالة التكرار
+    all_candidates = preferred_models + [m for m in dynamic_models if m not in preferred_models]
+    return all_candidates
 
 def generate_content():
-    model_name = get_active_model_name()
-    print(f"تم اختيار النموذج الفعال تلقائياً: {model_name}")
-    
-    model = genai.GenerativeModel(model_name)
-    response = model.generate_content(PROMPT)
-        
-    text = response.text.strip()
-    
-    if text.startswith("```json"):
-        text = text[7:]
-    if text.startswith("```"):
-        text = text[3:]
-    if text.endswith("```"):
-        text = text[:-3]
-        
-    return json.loads(text.strip())
+    candidate_models = get_candidate_models()
+    last_error = None
+
+    for model_name in candidate_models:
+        try:
+            print(f"جاري تجربة النموذج: {model_name}...")
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(PROMPT)
+            print(f"تم التوليد بنجاح باستخدام النموذج: {model_name}")
+            
+            text = response.text.strip()
+            if text.startswith("```json"):
+                text = text[7:]
+            if text.startswith("```"):
+                text = text[3:]
+            if text.endswith("```"):
+                text = text[:-3]
+                
+            return json.loads(text.strip())
+        except Exception as e:
+            print(f"فشلت المحاولة مع {model_name}: {e}")
+            last_error = e
+
+    raise Exception(f"فشل التوليد مع جميع النماذج المتاحة. آخر خطأ: {last_error}")
 
 def create_slide_image(slide_data, index, output_dir="slides"):
     os.makedirs(output_dir, exist_ok=True)
