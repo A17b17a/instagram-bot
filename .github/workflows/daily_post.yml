@@ -1,0 +1,129 @@
+name: 📸 Daily Instagram Carousel Post
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: ⬇️ Checkout repository
+        uses: actions/checkout@v4
+
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: 🔤 Install Arabic fonts and system libs
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji \
+            libglib2.0-0 libnss3 libnspr4 libatk1.0-0 \
+            libatk-bridge2.0-0 libcups2 libdrm2 libxkbcommon0 \
+            libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+            libgbm1 libasound2
+          fc-cache -fv
+
+      - name: 📦 Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install playwright instagrapi pillow PyNaCl
+
+      - name: 🌐 Install Playwright Chromium
+        run: playwright install chromium
+
+      - name: 🎨 Generate carousel slides
+        env:
+          USED_TOPICS_JSON: ${{ secrets.USED_TOPICS_JSON }}
+        run: python generate_carousel.py
+
+      - name: 🚀 Post to Instagram
+        env:
+          INSTAGRAM_USERNAME:     ${{ secrets.INSTAGRAM_USERNAME }}
+          INSTAGRAM_PASSWORD:     ${{ secrets.INSTAGRAM_PASSWORD }}
+          INSTAGRAM_SESSION_JSON: ${{ secrets.INSTAGRAM_SESSION_JSON }}
+        run: python post_to_instagram.py
+
+      - name: 🔄 Auto-update secrets (session + topics)
+        if: success()
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          REPO:   ${{ github.repository }}
+        run: |
+          python3 << 'PYEOF'
+          import os, json, urllib.request
+          from base64 import b64decode, b64encode
+          from pathlib import Path
+          import nacl.public
+
+          repo  = os.environ["REPO"]
+          token = os.environ["GH_PAT"]
+
+          def get_public_key():
+              req = urllib.request.Request(
+                  f"https://api.github.com/repos/{repo}/actions/secrets/public-key",
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Accept": "application/vnd.github+json"
+                  }
+              )
+              with urllib.request.urlopen(req) as r:
+                  return json.loads(r.read())
+
+          def encrypt_secret(pub_key_b64: str, value: str) -> str:
+              pk_bytes = b64decode(pub_key_b64)
+              box = nacl.public.SealedBox(nacl.public.PublicKey(pk_bytes))
+              encrypted = box.encrypt(value.encode("utf-8"))
+              return b64encode(encrypted).decode("utf-8")
+
+          def update_secret(secret_name: str, value: str, pub: dict):
+              enc = encrypt_secret(pub["key"], value)
+              body = json.dumps({
+                  "encrypted_value": enc,
+                  "key_id": pub["key_id"]
+              }).encode()
+              req = urllib.request.Request(
+                  f"https://api.github.com/repos/{repo}/actions/secrets/{secret_name}",
+                  data=body,
+                  method="PUT",
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Content-Type": "application/json",
+                      "Accept": "application/vnd.github+json"
+                  }
+              )
+              with urllib.request.urlopen(req) as r:
+                  print(f"✅ {secret_name} updated (HTTP {r.status})")
+
+          pub = get_public_key()
+
+          session_file = Path("session.json")
+          if session_file.exists():
+              update_secret("INSTAGRAM_SESSION_JSON", session_file.read_text(), pub)
+          else:
+              print("⚠️  session.json not found — INSTAGRAM_SESSION_JSON not updated.")
+
+          topics_file = Path("used_topics.json")
+          if topics_file.exists():
+              update_secret("USED_TOPICS_JSON", topics_file.read_text(), pub)
+          else:
+              print("⚠️  used_topics.json not found — USED_TOPICS_JSON not updated.")
+          PYEOF
+
+      - name: 💾 Upload slides artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: carousel-run-${{ github.run_number }}
+          path: daily_post/
+          retention-days: 7
