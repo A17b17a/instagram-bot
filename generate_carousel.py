@@ -2,7 +2,7 @@ import os
 import json
 import random
 from pathlib import Path
-import google.generativeai as genai
+from google import genai
 from playwright.sync_api import sync_playwright
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
@@ -47,7 +47,8 @@ def generate_content_with_gemini():
     if not GEMINI_API_KEY:
         raise ValueError("❌ GEMINI_API_KEY غير موجود في Secrets!")
 
-    genai.configure(api_key=GEMINI_API_KEY)
+    # استخدام الحزمة الرسمية الجديدة google-genai
+    client = genai.Client(api_key=GEMINI_API_KEY)
     history = load_history()
     category = random.choice(CATEGORIES)
     
@@ -104,15 +105,17 @@ def generate_content_with_gemini():
     }}
     """
 
-    # قائمة بالنماذج المتاحة للتجربة بالتتابع لضمان عمل الخدمة دائماً
-    models_to_try = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro"]
+    # تجربة الموديلات الجديدة الحديثة مع الحزمة الجدية
+    models_to_try = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
     raw_text = None
     last_error = None
 
     for model_name in models_to_try:
         try:
-            model = genai.GenerativeModel(model_name)
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=model_name,
+                contents=prompt
+            )
             raw_text = response.text
             if raw_text:
                 break
