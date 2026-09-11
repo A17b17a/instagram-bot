@@ -2,7 +2,7 @@ name: 📸 Daily Instagram Carousel Post
 
 on:
   schedule:
-    - cron: "0 17 * * *"
+    - cron: "0 17 * * *" # 17:00 UTC = 8:00 PM Baghdad/Diyala time
   workflow_dispatch:
 
 permissions:
@@ -108,13 +108,13 @@ jobs:
           if session_file.exists():
               update_secret("INSTAGRAM_SESSION_JSON", session_file.read_text(), pub)
           else:
-              print("⚠️  session.json not found — INSTAGRAM_SESSION_JSON not updated.")
+              print("⚠️ session.json not found — INSTAGRAM_SESSION_JSON not updated.")
 
           topics_file = Path("used_topics.json")
           if topics_file.exists():
               update_secret("USED_TOPICS_JSON", topics_file.read_text(), pub)
           else:
-              print("⚠️  used_topics.json not found — USED_TOPICS_JSON not updated.")
+              print("⚠️ used_topics.json not found — USED_TOPICS_JSON not updated.")
           PYEOF
 
       - name: 💾 Upload slides artifact
