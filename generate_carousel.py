@@ -86,7 +86,6 @@ def get_candidate_models():
     except Exception as e:
         print(f"تنبيه: تعذر جلب قائمة النماذج ديناميكياً: {e}")
 
-    # الدمج مع إزالة التكرار
     all_candidates = preferred_models + [m for m in dynamic_models if m not in preferred_models]
     return all_candidates
 
@@ -116,7 +115,7 @@ def generate_content():
 
     raise Exception(f"فشل التوليد مع جميع النماذج المتاحة. آخر خطأ: {last_error}")
 
-def create_slide_image(slide_data, index, output_dir="slides"):
+def create_slide_image(slide_data, index, output_dir="daily_post"):
     os.makedirs(output_dir, exist_ok=True)
     img = Image.new("RGB", (1080, 1350), color=(15, 23, 42))
     draw = ImageDraw.Draw(img)
@@ -152,8 +151,8 @@ def main():
     slides = data.get("slides", [])
     
     for idx, slide in enumerate(slides):
-        create_slide_image(slide, idx)
-    print("تم إنشاء الشرائح بنجاح.")
+        create_slide_image(slide, idx, output_dir="daily_post")
+    print("تم إنشاء الشرائح بنجاح في مجلد daily_post.")
 
 if __name__ == "__main__":
     main()
