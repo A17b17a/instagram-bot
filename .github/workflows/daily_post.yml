@@ -1,126 +1,48 @@
-name: 📸 Daily Instagram Carousel Post
+name: Daily Instagram Carousel Post
 
 on:
-  schedule:
-    - cron: "0 17 * * *" # 17:00 UTC = 8:00 PM Baghdad/Diyala time
   workflow_dispatch:
-
-permissions:
-  contents: read
+  schedule:
+    - cron: '0 15 * * *'
 
 jobs:
   post:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
 
     steps:
-      - name: ⬇️ Checkout repository
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: 🐍 Set up Python 3.11
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
-          cache: "pip"
+          python-version: '3.11'
 
-      - name: 🔤 Install Arabic fonts
+      - name: Install Dependencies
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            fonts-noto-core fonts-noto-cjk fonts-noto-color-emoji
-          fc-cache -fv
+          python -m pip install --upgrade pip
+          pip install instagrapi playwright requests pydantic
+          playwright install chromium
+          playwright install-deps chromium
 
-      - name: 📦 Install Python dependencies
-        run: |
-          pip install --upgrade pip
-          pip install playwright instagrapi pillow PyNaCl google-generativeai
-
-      - name: 🌐 Install Playwright Chromium with dependencies
-        run: playwright install --with-deps chromium
-
-      - name: 🎨 Generate carousel slides
+      - name: Generate Carousel Images via Gemini
         env:
-          USED_TOPICS_JSON: ${{ secrets.USED_TOPICS_JSON }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python generate_carousel.py
-
-      - name: 🚀 Post to Instagram
-        env:
-          INSTAGRAM_USERNAME:     ${{ secrets.INSTAGRAM_USERNAME }}
-          INSTAGRAM_PASSWORD:     ${{ secrets.INSTAGRAM_PASSWORD }}
-          INSTAGRAM_SESSION_JSON: ${{ secrets.INSTAGRAM_SESSION_JSON }}
-        run: python post_to_instagram.py
-
-      - name: 🔄 Auto-update secrets (session + topics)
-        if: success()
-        env:
-          GH_PAT: ${{ secrets.GH_PAT }}
-          REPO:   ${{ github.repository }}
         run: |
-          python3 << 'PYEOF'
-          import os, json, urllib.request
-          from base64 import b64decode, b64encode
-          from pathlib import Path
-          import nacl.public
+          python generate_carousel.py
 
-          repo  = os.environ["REPO"]
-          token = os.environ["GH_PAT"]
+      - name: Post to Instagram
+        env:
+          INSTAGRAM_USERNAME: ${{ secrets.INSTAGRAM_USERNAME }}
+          INSTAGRAM_PASSWORD: ${{ secrets.INSTAGRAM_PASSWORD }}
+          INSTAGRAM_SESSION_JSON: ${{ secrets.INSTAGRAM_SESSION_JSON }}
+        run: |
+          python post_to_instagram.py
 
-          def get_public_key():
-              req = urllib.request.Request(
-                  f"https://api.github.com/repos/{repo}/actions/secrets/public-key",
-                  headers={
-                      "Authorization": f"Bearer {token}",
-                      "Accept": "application/vnd.github+json"
-                  }
-              )
-              with urllib.request.urlopen(req) as r:
-                  return json.loads(r.read())
-
-          def encrypt_secret(pub_key_b64: str, value: str) -> str:
-              pk_bytes = b64decode(pub_key_b64)
-              box = nacl.public.SealedBox(nacl.public.PublicKey(pk_bytes))
-              encrypted = box.encrypt(value.encode("utf-8"))
-              return b64encode(encrypted).decode("utf-8")
-
-          def update_secret(secret_name: str, value: str, pub: dict):
-              enc = encrypt_secret(pub["key"], value)
-              body = json.dumps({
-                  "encrypted_value": enc,
-                  "key_id": pub["key_id"]
-              }).encode()
-              req = urllib.request.Request(
-                  f"https://api.github.com/repos/{repo}/actions/secrets/{secret_name}",
-                  data=body,
-                  method="PUT",
-                  headers={
-                      "Authorization": f"Bearer {token}",
-                      "Content-Type": "application/json",
-                      "Accept": "application/vnd.github+json"
-                  }
-              )
-              with urllib.request.urlopen(req) as r:
-                  print(f"✅ {secret_name} updated (HTTP {r.status})")
-
-          pub = get_public_key()
-
-          session_file = Path("session.json")
-          if session_file.exists():
-              update_secret("INSTAGRAM_SESSION_JSON", session_file.read_text(), pub)
-          else:
-              print("⚠️ session.json not found — INSTAGRAM_SESSION_JSON not updated.")
-
-          topics_file = Path("used_topics.json")
-          if topics_file.exists():
-              update_secret("USED_TOPICS_JSON", topics_file.read_text(), pub)
-          else:
-              print("⚠️ used_topics.json not found — USED_TOPICS_JSON not updated.")
-          PYEOF
-
-      - name: 💾 Upload slides artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: carousel-run-${{ github.run_number }}
-          path: daily_post/
-          retention-days: 7
+      - name: Commit and Push Updated Topic History
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add used_topics.json
+          git commit -m "Update used_topics.json history [skip ci]" || echo "No history changes to commit"
+          git push
