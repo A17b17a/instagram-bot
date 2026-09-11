@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import textwrap
 import urllib.request
 import google.generativeai as genai
 from PIL import Image, ImageDraw, ImageFont
@@ -9,18 +10,23 @@ from PIL import Image, ImageDraw, ImageFont
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
-# 2. ضمان وجود خط عربي يدعم الرسم الصحيح
+# 2. تحميل خط عربي يضمن ظهور الأحرف العربية بشكل صحيح (Cairo)
 FONT_PATH = "Cairo-Bold.ttf"
-FONT_URL = "https://github.com/google/fonts/raw/main/ofl/cairo/static/Cairo-Bold.ttf"
+FONT_URL = "https://raw.githubusercontent.com/google/fonts/main/ofl/cairo/static/Cairo-Bold.ttf"
 
 def ensure_font():
     if not os.path.exists(FONT_PATH):
         print("جاري تحميل الخط العربي (Cairo)...")
         try:
-            urllib.request.urlretrieve(FONT_URL, FONT_PATH)
-            print("تم تحميل الخط بنجاح.")
+            req = urllib.request.Request(
+                FONT_URL, 
+                headers={'User-Agent': 'Mozilla/5.0'}
+            )
+            with urllib.request.urlopen(req) as response, open(FONT_PATH, 'wb') as out_file:
+                out_file.write(response.read())
+            print("تم تحميل الخط العربي بنجاح.")
         except Exception as e:
-            print(f"فشل تحميل الخط: {e}")
+            print(f"تنبيه: تعذر تحميل الخط العربي تلقائياً: {e}")
 
 ensure_font()
 
@@ -53,7 +59,7 @@ PROMPT = f"""
 - رمز التنوع العشوائي: #{seed_id}
 
 تعليمات المحتوى:
-- ابتكار موضوع محدد ودقيق جداً داخل الصنف المختار (وليس موضوعاً عاماً).
+- ابتكار موضوع محدد ودقيق جداً داخل الصنف المختار.
 - إذا كان الصنف "هل تعلم؟" اجعل المحتوى معلومة غريبة أو مفيدة في اللغة.
 - إذا كان "أخطاء شائعة" قارن بين الجملة الخاطئة والجملة الصحيحة مع الشرح.
 - إذا كان "قواعد" اعطِ القاعدة مع مثال وزاري مترجم.
@@ -135,32 +141,69 @@ def create_slide_image(slide_data, index, output_dir="daily_post"):
     img = Image.new("RGB", (1080, 1350), color=(15, 23, 42))
     draw = ImageDraw.Draw(img)
     
-    # تحميل الخط بأحجام مختلفة
+    # إعداد الخطوط
     try:
-        font_badge = ImageFont.truetype(FONT_PATH, 26)
-        font_title = ImageFont.truetype(FONT_PATH, 38)
-        font_body = ImageFont.truetype(FONT_PATH, 28)
+        font_badge = ImageFont.truetype(FONT_PATH, 28)
+        font_title = ImageFont.truetype(FONT_PATH, 40)
+        font_body = ImageFont.truetype(FONT_PATH, 30)
     except Exception:
         font_badge = font_title = font_body = ImageFont.load_default()
 
+    # إطار داخلي للإنستغرام
     draw.rectangle([40, 40, 1040, 1310], outline=(51, 65, 85), width=4)
     
     badge_text = slide_data.get("badge", "درس اليوم")
     title_text = slide_data.get("title", "")
     content_text = slide_data.get("content", "")
     
-    # رسم البادج والعنوان
-    draw.rectangle([80, 80, 500, 150], fill=(99, 102, 241))
-    draw.text((100, 95), badge_text, font=font_badge, fill=(255, 255, 255))
-    draw.text((80, 180), title_text, font=font_title, fill=(248, 250, 252))
+    # رسم البادج
+    draw.rectangle([80, 80, 520, 150], fill=(99, 102, 241))
+    draw.text((100, 92), badge_text, font=font_badge, fill=(255, 255, 255))
     
-    # رسم المحتوى
+    # رسم العنوان الرئيسي
+    title_wrapped = textwrap.fill(title_text, width=35)
+    draw.text((80, 180), title_wrapped, font=font_title, fill=(248, 250, 252))
+    
+    # رسم المحتوى أو الأسئلة
     if "quiz" in slide_data:
         quiz = slide_data["quiz"]
-        draw.text((80, 300), f"سؤال: {quiz.get('question', '')}", font=font_body, fill=(226, 232, 240))
-        y_offset = 400
+        question_text = textwrap.fill(f"سؤال: {quiz.get('question', '')}", width=40)
+        draw.text((80, 320), question_text, font=font_body, fill=(226, 232, 240))
+        
+        y_offset = 480
         for opt in quiz.get("options", []):
-            draw.text((100, y_offset), f"- {opt}", font=font_body, fill=(203, 213, 225))
-            y_offset += 80
+            opt_text = textwrap.fill(f"- {opt}", width=40)
+            draw.text((100, y_offset), opt_text, font=font_body, fill=(203, 213, 225))
+            y_offset += 90
     else:
-        draw.text((
+        content_wrapped = textwrap.fill(content_text, width=42)
+        draw.text((80, 320), content_wrapped, font=font_body, fill=(203, 213, 225))
+        
+    file_path = os.path.join(output_dir, f"slide_{index + 1}.png")
+    img.save(file_path)
+    return file_path
+
+def save_caption(caption_text, output_dir="daily_post"):
+    os.makedirs(output_dir, exist_ok=True)
+    file_path = os.path.join(output_dir, "caption.txt")
+    with open(file_path, "w", encoding="utf-8") as f:
+        f.write(caption_text)
+    print(f"تم حفظ الكابشن في {file_path}")
+
+def main():
+    print(f"جاري التوليد لصنف [{selected_category}] - [{selected_unit}]...")
+    data = generate_content()
+    slides = data.get("slides", [])
+    
+    for idx, slide in enumerate(slides):
+        create_slide_image(slide, idx, output_dir="daily_post")
+    print("تم إنشاء الشرائح بنجاح.")
+
+    caption_text = data.get("caption")
+    if not caption_text:
+        caption_text = f"📚 درس اليوم: {selected_category} - {selected_unit}\n\n#سادس_إعدادي #انكليزي_سادس #وزاريات"
+    
+    save_caption(caption_text, output_dir="daily_post")
+
+if __name__ == "__main__":
+    main()
