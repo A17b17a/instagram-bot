@@ -4,7 +4,6 @@ from pathlib import Path
 from instagrapi import Client
 from instagrapi.types import StoryMedia
 
-# دعم أسماء المتغيرات المختلفة في GitHub Secrets
 USERNAME = os.getenv("INSTAGRAM_USERNAME") or os.getenv("IG_USERNAME", "")
 PASSWORD = os.getenv("INSTAGRAM_PASSWORD") or os.getenv("IG_PASSWORD", "")
 SESSION_ENV = os.getenv("INSTAGRAM_SESSION_JSON", "")
@@ -22,19 +21,21 @@ def main():
     caption = caption_file.read_text(encoding="utf-8") if caption_file.exists() else ""
 
     cl = Client()
+    
+    # تجاوز استدعاء رابط التتبع المعطل من إنستغرام لمنع خطأ 404
+    cl.expose = lambda *args, **kwargs: True
+
     logged_in = False
 
     # 1️⃣ استخدام الجلسة الممررة من GitHub Secrets
     if SESSION_ENV.strip():
         try:
             session_str = SESSION_ENV.strip()
-            # إذا كان المدخل هو sessionid فقط (سلسلة نصية)
             if not session_str.startswith("{"):
                 print("🔄 جاري تسجيل الدخول باستخدام sessionid...")
                 cl.login_by_sessionid(session_str)
                 logged_in = True
             else:
-                # إذا كان المدخل عبارة عن JSON كامل
                 print("🔄 جاري تحميل الجلسة من متغير INSTAGRAM_SESSION_JSON...")
                 session_data = json.loads(session_str)
                 with open(SESSION_FILE, "w", encoding="utf-8") as f:
@@ -46,7 +47,7 @@ def main():
         except Exception as e:
             print(f"⚠️ فشل تسجيل الدخول بمتغير الجلسة: {e}")
 
-    # 2️⃣ استخدام ملف ig_session.json إن وجد في المستودع
+    # 2️⃣ استخدام ملف ig_session.json إن وجد
     if not logged_in and SESSION_FILE.exists():
         try:
             print("🔄 جاري تحميل الجلسة من ملف ig_session.json...")
@@ -57,7 +58,7 @@ def main():
         except Exception as e:
             print(f"⚠️ فشل تحميل ملف الجلسة: {e}")
 
-    # 3️⃣ محاولة الدخول التقليدية (خطة بديلة)
+    # 3️⃣ محاولة الدخول التقليدية
     if not logged_in:
         print("🔄 محاولة تسجيل الدخول المباشر بكلمة السر...")
         cl.login(USERNAME, PASSWORD)
