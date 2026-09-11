@@ -4,9 +4,8 @@ from pathlib import Path
 from instagrapi import Client
 from instagrapi.types import StoryMedia
 
-# إصلاح توافقية خاصية extra في StoryMedia لتجنب خطأ AttributeError
-if not hasattr(StoryMedia, "extra"):
-    setattr(StoryMedia, "extra", None)
+# إصلاح خلل خاصية extra في StoryMedia لضمان عمل الستوري
+StoryMedia.extra = property(lambda self: {})
 
 USERNAME = os.getenv("INSTAGRAM_USERNAME") or os.getenv("IG_USERNAME", "")
 PASSWORD = os.getenv("INSTAGRAM_PASSWORD") or os.getenv("IG_PASSWORD", "")
@@ -26,12 +25,12 @@ def main():
 
     cl = Client()
     
-    # تجاوز استدعاء رابط التتبع المعطل
+    # تجاوز رابط التتبع المعطل من إنستغرام
     cl.expose = lambda *args, **kwargs: True
 
     logged_in = False
 
-    # 1️⃣ استخدام الجلسة الممررة من GitHub Secrets
+    # 1️⃣ تسجيل الدخول عبر الجلسة
     if SESSION_ENV.strip():
         try:
             session_str = SESSION_ENV.strip()
@@ -51,7 +50,7 @@ def main():
         except Exception as e:
             print(f"⚠️ فشل تسجيل الدخول بمتغير الجلسة: {e}")
 
-    # 2️⃣ استخدام ملف ig_session.json إن وجد
+    # 2️⃣ تسجيل الدخول بملف الجلسة
     if not logged_in and SESSION_FILE.exists():
         try:
             print("🔄 جاري تحميل الجلسة من ملف ig_session.json...")
@@ -62,7 +61,7 @@ def main():
         except Exception as e:
             print(f"⚠️ فشل تحميل ملف الجلسة: {e}")
 
-    # 3️⃣ محاولة الدخول التقليدية
+    # 3️⃣ تسجيل الدخول المباشر
     if not logged_in:
         print("🔄 محاولة تسجيل الدخول المباشر بكلمة السر...")
         cl.login(USERNAME, PASSWORD)
@@ -77,12 +76,18 @@ def main():
     try:
         post_sticker = StoryMedia(
             media_pk=post_media.pk,
-            x=0.5, y=0.5, width=0.7, height=0.7
+            x=0.5, y=0.5, width=0.6, height=0.6
         )
         cl.photo_upload_to_story(path=slides[0], stickers=[post_sticker])
         print("🎉 تم نشر الستوري بنجاح مع زر التوجيه للمنشور!")
     except Exception as e:
-        print(f"⚠️ تعذر رفع الستوري بشكل تفاعلي: {e}")
+        print(f"⚠️ تعذر نشر الستوري بالملصق التفاعلي: {e}")
+        # محاولة نشر الستوري كصورة عادية إذا فشل الملصق
+        try:
+            cl.photo_upload_to_story(path=slides[0])
+            print("🎉 تم نشر الستوري كصورة عادية بنجاح!")
+        except Exception as err:
+            print(f"❌ فشل نشر الستوري بالكامل: {err}")
 
 if __name__ == "__main__":
     main()
