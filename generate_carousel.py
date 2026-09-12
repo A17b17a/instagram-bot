@@ -6,7 +6,7 @@ from pathlib import Path
 from playwright.sync_api import sync_playwright
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-OUTPUT_DIR = Path("daily_post")
+OUTPUT_DIR = Path("output")
 OUTPUT_DIR.mkdir(exist_ok=True)
 HISTORY_FILE = Path("used_topics.json")
 
