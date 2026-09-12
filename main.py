@@ -1,62 +1,111 @@
 import os
 import requests
 
-# جلب الـ Access Token من متناغزات GitHub Secrets
-ACCESS_TOKEN = os.getenv("LINKEDIN_ACCESS_TOKEN")
+# ==========================================
+# 1. نشر بوست على Instagram
+# ==========================================
+def post_to_instagram(image_path, caption):
+    print("📸 [Instagram] جاري نشر البوست...")
+    try:
+        import post_to_instagram as insta_bot
+        insta_bot.publish(image_path, caption)
+        print("✅ [Instagram] تم النشر بنجاح!")
+    except ImportError:
+        print("⚠️ [Instagram] ملف post_to_instagram.py غير موجود، تم تجاوز المنصة.")
+    except Exception as e:
+        print(f"❌ [Instagram] خطأ أثناء النشر: {e}")
 
-if not ACCESS_TOKEN:
-    print("❌ خطأ: لم يتم العثور على LINKEDIN_ACCESS_TOKEN!")
-    exit(1)
+# ==========================================
+# 2. نشر بوست على Telegram
+# ==========================================
+def post_to_telegram(image_path, caption):
+    bot_token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    
+    if not bot_token or not chat_id:
+        print("⚠️ [Telegram] تعذر النشر: بيانات TELEGRAM_BOT_TOKEN أو TELEGRAM_CHAT_ID غير متوفرة في Secrets.")
+        return
 
-# 1. جلب معرف المستخدم (LinkedIn Person URN) تلقائياً
-user_info_url = "https://api.linkedin.com/v2/userinfo"
-headers_auth = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
+    print("✈️ [Telegram] جاري نشر البوست...")
+    
+    if os.path.exists(image_path):
+        url = f"https://api.telegram.org/bot{bot_token}/sendPhoto"
+        with open(image_path, 'rb') as photo:
+            res = requests.post(url, data={'chat_id': chat_id, 'caption': caption}, files={'photo': photo})
+    else:
+        url = f"https://api.telegram.org/bot{bot_token}/sendMessage"
+        res = requests.post(url, data={'chat_id': chat_id, 'text': caption})
 
-response_user = requests.get(user_info_url, headers=headers_auth)
+    if res.status_code == 200:
+        print("✅ [Telegram] تم النشر بنجاح!")
+    else:
+        print(f"❌ [Telegram] خطأ أثناء النشر: {res.text}")
 
-if response_user.status_code != 200:
-    print("❌ فشل في جلب معلومات المستخدم:", response_user.status_code, response_user.text)
-    exit(1)
+# ==========================================
+# 3. نشر بوست على LinkedIn
+# ==========================================
+def post_to_linkedin(caption):
+    access_token = os.getenv('LINKEDIN_ACCESS_TOKEN')
+    if not access_token:
+        print("⚠️ [LinkedIn] تعذر النشر: LINKEDIN_ACCESS_TOKEN غير موجود في Secrets.")
+        return
 
-user_sub = response_user.json().get("sub")
-author_urn = f"urn:li:person:{user_sub}"
-print(f"✅ تم التعرف على حسابك بنجاح: {author_urn}")
-
-# 2. نص المنشور المراد نشره
-# (يمكنك تعديل النص هنا أو تطويره مستقبلاً ليجلب محتوى من AI أو ملف خارجي)
-post_text = """🚀 Hello LinkedIn Community!
-
-This post was generated and published automatically using Python & GitHub Actions!
-
-#Python #Automation #GitHubActions #Tech"""
-
-# 3. إرسال المنشور إلى LinkedIn API
-post_url = "https://api.linkedin.com/v2/ugcPosts"
-headers_post = {
-    "Authorization": f"Bearer {ACCESS_TOKEN}",
-    "Content-Type": "application/json",
-    "X-Restli-Protocol-Version": "2.0.0"
-}
-
-post_body = {
-    "author": author_urn,
-    "lifecycleState": "PUBLISHED",
-    "specificContent": {
-        "com.linkedin.ugc.ShareContent": {
-            "shareCommentary": {
-                "text": post_text
-            },
-            "shareMediaCategory": "NONE"
-        }
-    },
-    "visibility": {
-        "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
+    print("💼 [LinkedIn] جاري نشر البوست...")
+    
+    headers = {
+        'Authorization': f'Bearer {access_token}',
+        'Content-Type': 'application/json',
+        'X-Restli-Protocol-Version': '2.0.0'
     }
-}
 
-response = requests.post(post_url, headers=headers_post, json=post_body)
+    user_res = requests.get('https://api.linkedin.com/v2/userinfo', headers={'Authorization': f'Bearer {access_token}'})
+    if user_res.status_code != 200:
+        print(f"❌ [LinkedIn] خطأ في جلب بيانات الحساب: {user_res.text}")
+        return
+        
+    person_urn = f"urn:li:person:{user_res.json().get('sub')}"
 
-if response.status_code in [200, 201]:
-    print("🎉 تم نشر المنشور بنجاح على حسابك في LinkedIn!")
-else:
-    print("❌ فشل النشر:", response.status_code, response.text)
+    post_payload = {
+        "author": person_urn,
+        "lifecycleState": "PUBLISHED",
+        "specificContent": {
+            "com.linkedin.ugc.ShareContent": {
+                "shareCommentary": {"text": caption},
+                "shareMediaCategory": "NONE"
+            }
+        },
+        "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"}
+    }
+
+    res = requests.post("https://api.linkedin.com/v2/ugcPosts", headers=headers, json=post_payload)
+    if res.status_code in [200, 201]:
+        print("✅ [LinkedIn] تم النشر بنجاح!")
+    else:
+        print(f"❌ [LinkedIn] خطأ أثناء النشر: {res.text}")
+
+# ==========================================
+# التنفيذ المستقل (عزل كامل لكل منصة)
+# ==========================================
+if __name__ == "__main__":
+    
+    caption_text = "🚀 منشور جديد تم إرساله تلقائياً عبر نظام الأتمتة الموحد!\n\n#Automation #Python #Content"
+    image_file = "post_image.png"
+
+    print("--- بدء عملية النشر على جميع المنصات ---\n")
+
+    try:
+        post_to_instagram(image_file, caption_text)
+    except Exception as e:
+        print(f"❌ فشل التنفيذ لـ Instagram: {e}")
+
+    try:
+        post_to_telegram(image_file, caption_text)
+    except Exception as e:
+        print(f"❌ فشل التنفيذ لـ Telegram: {e}")
+
+    try:
+        post_to_linkedin(caption_text)
+    except Exception as e:
+        print(f"❌ فشل التنفيذ لـ LinkedIn: {e}")
+
+    print("\n--- اكتملت عملية النشر ---")
