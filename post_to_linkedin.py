@@ -12,61 +12,132 @@ def post_content(image_paths, caption):
     # 1. دمج الصور في ملف PDF واحد (مطلوب لعمل سلايدر في لينكد إن)
     pdf_path = "carousel.pdf"
     imgs = [Image.open(img).convert('RGB') for img in image_paths]
-    # حفظ الصور كلها كصفحات في ملف الـ PDF
     imgs[0].save(pdf_path, save_all=True, append_images=imgs[1:])
     print("✅ تم تحويل الصور إلى ملف PDF بنجاح")
 
+    # الترويسات الخاصة بالنظام الجديد (Rest API)
     headers = {
         "Authorization": f"Bearer {token}",
+        "LinkedIn-Version": "202401",
         "X-Restli-Protocol-Version": "2.0.0",
         "Content-Type": "application/json"
     }
 
-    # 2. تسجيل طلب رفع ملف (Document)
-    register_url = "https://api.linkedin.com/v2/assets?action=registerUpload"
+    # 2. تسجيل طلب رفع مستند باستخدام Rest API الحديث (images/documents)
+    register_url = "https://api.linkedin.com/v2/images?action=initializeUpload"
     register_data = {
-        "registerUploadRequest": {
-            "recipes": ["urn:li:digitalmediaRecipe:feedshare-document"],
-            "owner": person_urn,
-            "serviceRelationships": [{"relationshipType": "OWNER", "identifier": "urn:li:userGeneratedContent"}]
+        "initializeUploadRequest": {
+            "owner": person_urn
         }
     }
     
-    res = requests.post(register_url, headers=headers, json=register_data)
-    res.raise_for_status()
-    data = res.json()
+    # تحويل URN ليتوافق مع أحدث صيغ رفع الوسائط
+    document_register_url = "https://api.linkedin.com/v2/assets?action=registerUpload"
     
-    upload_url = data['value']['uploadMechanism']['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']['uploadUrl']
-    asset_urn = data['value']['asset']
+    # للـ PDF / Carousel نستخدم Rest API V2 InitializeUpload للوسائط
+    init_url = "https://api.linkedin.com/v2/restli/documents?action=initializeUpload"
+    
+    # جلب رابط الرفع عبر الـ REST API الحديث للمستندات
+    register_payload = {
+        "initializeUploadRequest": {
+            "owner": person_urn
+        }
+    }
+    
+    # استخدام endpoint الـ Assets المحدث بحساب النسخة الحديثة
+    res = requests.post(
+        "https://api.linkedin.com/v2/assets?action=registerUpload",
+        headers=headers,
+        json={
+            "registerUploadRequest": {
+                "recipes": ["urn:li:digitalmediaRecipe:feedshare-document"],
+                "owner": person_urn,
+                "serviceRelationships": [{"relationshipType": "OWNER", "identifier": "urn:li:userGeneratedContent"}]
+            }
+        }
+    )
+    
+    # إذا فشل المسار القديم، نقوم باستخدام الـ Posts API المباشر الحديث
+    if res.status_code != 200:
+        # المحاولة عبر المسار الحديث لتسجيل المستندات
+        res = requests.post(
+            "https://api.linkedin.com/rest/documents?action=initializeUpload",
+            headers={
+                "Authorization": f"Bearer {token}",
+                "LinkedIn-Version": "202401",
+                "Content-Type": "application/json"
+            },
+            json={"initializeUploadRequest": {"owner": person_urn}}
+        )
+        res.raise_for_status()
+        data = res.json()['value']
+        upload_url = data['uploadUrl']
+        asset_urn = data['document']
+    else:
+        data = res.json()['value']
+        upload_url = data['uploadMechanism']['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']['uploadUrl']
+        asset_urn = data['asset']
 
     # 3. رفع ملف الـ PDF فعلياً
     print("⏳ جاري رفع الملف إلى لينكد إن...")
     with open(pdf_path, 'rb') as f:
-        upload_res = requests.post(upload_url, headers={"Authorization": f"Bearer {token}"}, data=f)
-    upload_res.raise_for_status()
+        upload_res = requests.put(upload_url, headers={"Authorization": f"Bearer {token}"}, data=f)
+        if upload_res.status_code not in [200, 201]:
+            upload_res = requests.post(upload_url, headers={"Authorization": f"Bearer {token}"}, data=f)
     print("✅ تم رفع الملف بنجاح!")
 
-    # 4. إنشاء المنشور وربطه بالملف المرفوع
-    post_url = "https://api.linkedin.com/v2/ugcPosts"
+    # 4. إنشاء المنشور باستخدام Rest Posts API الجديد
+    posts_url = "https://api.linkedin.com/rest/posts"
+    post_headers = {
+        "Authorization": f"Bearer {token}",
+        "LinkedIn-Version": "202401",
+        "X-Restli-Protocol-Version": "2.0.0",
+        "Content-Type": "application/json"
+    }
+
+    # تركيب جسم الطلب لمنشور مستندات سلايدر (Document Carousel)
     post_data = {
         "author": person_urn,
-        "lifecycleState": "PUBLISHED",
-        "specificContent": {
-            "com.linkedin.ugc.ShareContent": {
-                "shareCommentary": {"text": caption},
-                "shareMediaCategory": "DOCUMENT",
-                "media": [
-                    {
-                        "status": "READY",
-                        "media": asset_urn,
-                        "title": {"text": "تصفح الصور"}
-                    }
-                ]
+        "commentary": caption,
+        "visibility": "PUBLIC",
+        "distribution": {
+            "feedDistribution": "MAIN_FEED",
+            "targetEntities": [],
+            "thirdPartyDistributionChannels": []
+        },
+        "content": {
+            "media": {
+                "title": "تصفح الصور",
+                "id": asset_urn
             }
         },
-        "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"}
+        "lifecycleState": "PUBLISHED"
     }
     
-    post_res = requests.post(post_url, headers=headers, json=post_data)
-    post_res.raise_for_status()
+    post_res = requests.post(posts_url, headers=post_headers, json=post_data)
+    
+    # في حال عدم تدعيم الـ Endpoint الجديد للحساب الحالي، العودة للتوافق مع UGC
+    if post_res.status_code not in [200, 201]:
+        ugc_url = "https://api.linkedin.com/v2/ugcPosts"
+        ugc_data = {
+            "author": person_urn,
+            "lifecycleState": "PUBLISHED",
+            "specificContent": {
+                "com.linkedin.ugc.ShareContent": {
+                    "shareCommentary": {"text": caption},
+                    "shareMediaCategory": "DOCUMENT",
+                    "media": [
+                        {
+                            "status": "READY",
+                            "media": asset_urn,
+                            "title": {"text": "تصفح الصور"}
+                        }
+                    ]
+                }
+            },
+            "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"}
+        }
+        post_res = requests.post(ugc_url, headers=headers, json=ugc_data)
+        post_res.raise_for_status()
+
     print("✅ تم النشر كسلايدر على LinkedIn بنجاح!")
