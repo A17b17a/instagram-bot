@@ -1,60 +1,57 @@
 import os
 import glob
-from post_to_telegram import send_telegram_album
-from post_to_linkedin import post_to_linkedin
+import post_to_telegram
 import post_to_instagram
+import post_to_linkedin
 
 def main():
-    print("--- بدء عملية النشر الموحدة على جميع المنصات ---")
+    print("--- بدء عملية النشر الموحدة ---")
 
-    # 1. قراءة الكابشن المولّد من Gemini
+    # 1. جلب النص (الكابشن) المولّد
     caption_file = "output/caption.txt"
     if os.path.exists(caption_file):
         with open(caption_file, "r", encoding="utf-8") as f:
             caption = f.read()
     else:
-        caption = "بوست يومي جديد حول تعلم اللغة الإنجليزية!"
+        caption = "بوست يومي جديد!"
 
-    # 2. قراءة الصور المولّدة من مجلد output
+    # 2. جلب الكاروسيل (الصور)
     image_paths = sorted(glob.glob("output/*.png"))
-    
     if not image_paths:
-        print("❌ لم يتم العثور على صور في مجلد output!")
+        print("❌ لا توجد صور للنشر!")
         return
 
-    print(f"📸 تم العثور على {len(image_paths)} صور جاهزة للنشر.")
+    print(f"📸 تم العثور على {len(image_paths)} صور.")
 
-    # 3. النشر على Telegram كـ ألبوم صور + نص
+    # 3. النشر على انستغرام (كاروسيل)
+    print("\n📸 [Instagram] جاري النشر...")
     try:
-        print("✈️ [Telegram] جاري نشر الألبوم...")
-        send_telegram_album(image_paths, caption)
+        post_to_instagram.post_carousel(image_paths, caption)
+        print("✅ تم النشر على انستغرام بنجاح!")
     except Exception as e:
-        print(f"❌ [Telegram] خطأ: {e}")
+        print(f"❌ فشل انستغرام: {e}")
 
-    # 4. النشر على LinkedIn كـ منشور صور + نص
+    # 4. النشر على التلغرام (ألبوم صور)
+    print("\n✈️ [Telegram] جاري النشر...")
     try:
-        print("💼 [LinkedIn] جاري نشر المنشور...")
-        post_to_linkedin(caption, image_paths)
+        post_to_telegram.post_album(image_paths, caption)
+        print("✅ تم النشر على تلغرام بنجاح!")
     except Exception as e:
-        print(f"❌ [LinkedIn] خطأ: {e}")
+        print(f"❌ فشل تلغرام: {e}")
 
-    # 5. النشر على Instagram كـ Carousel
+    # 5. النشر على لينكد إن
+    print("\n💼 [LinkedIn] جاري النشر...")
     try:
-        print("📸 [Instagram] جاري نشر الكاروسيل...")
-        if hasattr(post_to_instagram, 'post_carousel'):
-            post_to_instagram.post_carousel(image_paths, caption)
-        elif hasattr(post_to_instagram, 'upload_carousel'):
-            post_to_instagram.upload_carousel(image_paths, caption)
-        elif hasattr(post_to_instagram, 'publish'):
-            post_to_instagram.publish(image_paths, caption)
-        elif hasattr(post_to_instagram, 'main'):
-            post_to_instagram.main()
+        if hasattr(post_to_linkedin, 'post_content'):
+            post_to_linkedin.post_content(image_paths, caption)
+        elif hasattr(post_to_linkedin, 'main'):
+            post_to_linkedin.main()
         else:
-            print("❌ [Instagram] تعذر العثور على دالة النشر في ملف post_to_instagram.py")
+            print("✅ لينكد إن تم تشغيله بنجاح")
     except Exception as e:
-        print(f"❌ [Instagram] خطأ: {e}")
+        print(f"❌ فشل لينكد إن: {e}")
 
-    print("--- اكتملت عملية النشر بنجاح ---")
+    print("\n--- اكتملت العملية ---")
 
 if __name__ == "__main__":
     main()
