@@ -1,4 +1,4 @@
-name: Daily Instagram Carousel Post
+name: Daily Multi-Platform Auto Poster
 
 on:
   workflow_dispatch:
@@ -28,26 +28,22 @@ jobs:
           playwright install chromium
           playwright install-deps chromium
 
-      - name: Generate Carousel Images via Gemini
+      - name: Generate Content via Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
           python generate_carousel.py
 
-      - name: Post to Instagram
+      - name: Run Master Multi-Platform Poster
         env:
           INSTAGRAM_USERNAME: ${{ secrets.INSTAGRAM_USERNAME }}
           INSTAGRAM_PASSWORD: ${{ secrets.INSTAGRAM_PASSWORD }}
           INSTAGRAM_SESSION_JSON: ${{ secrets.INSTAGRAM_SESSION_JSON }}
-        run: |
-          python post_to_instagram.py
-
-      - name: Post to Telegram
-        env:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
         run: |
-          python post_to_telegram.py
+          python main.py
 
       - name: Commit and Push Updated Topic History
         run: |
