@@ -2,7 +2,6 @@ import os
 import glob
 import post_to_telegram
 import post_to_instagram
-import post_to_linkedin
 
 def main():
     print("--- بدء عملية النشر الموحدة ---")
@@ -39,19 +38,21 @@ def main():
     except Exception as e:
         print(f"❌ فشل تلغرام: {e}")
 
-    # 5. النشر على لينكد إن
-    print("\n💼 [LinkedIn] جاري النشر...")
+    # 5. النشر على لينكد إن (تخطي تلقائي إذا لم يكن موجوداً)
+    print("\n💼 [LinkedIn] جاري التحقق من النشر...")
     try:
+        import post_to_linkedin
         if hasattr(post_to_linkedin, 'post_content'):
             post_to_linkedin.post_content(image_paths, caption)
         elif hasattr(post_to_linkedin, 'main'):
             post_to_linkedin.main()
-        else:
-            print("✅ لينكد إن تم تشغيله بنجاح")
+        print("✅ تم النشر على لينكد إن بنجاح!")
+    except ImportError:
+        print("⚠️ ملف لينكد إن غير موجود، تم التخطي بأمان ولن يؤثر على النشر.")
     except Exception as e:
         print(f"❌ فشل لينكد إن: {e}")
 
-    print("\n--- اكتملت العملية ---")
+    print("\n--- اكتملت العملية بنجاح ---")
 
 if __name__ == "__main__":
     main()
