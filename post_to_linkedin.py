@@ -1,147 +1,72 @@
-"""
-النشر على LinkedIn عبر API مباشرة (بدون ملفات محلية).
-المتغيرات المطلوبة في GitHub Secrets:
-  LINKEDIN_ACCESS_TOKEN   — Access Token من LinkedIn Developer App
-  LINKEDIN_PERSON_URN     — مثال: urn:li:person:XXXXXXXX
-                            (احصل عليه من: https://api.linkedin.com/v2/userinfo)
-"""
 import os
-import json
-import urllib.request
-import urllib.error
-from pathlib import Path
+import requests
+from PIL import Image
 
-API_BASE = "https://api.linkedin.com/v2"
+def post_content(image_paths, caption):
+    token = os.environ.get("LINKEDIN_ACCESS_TOKEN")
+    person_urn = os.environ.get("LINKEDIN_PERSON_URN")
 
+    if not token or not person_urn:
+        raise ValueError("❌ لم يتم العثور على LINKEDIN_ACCESS_TOKEN أو LINKEDIN_PERSON_URN")
 
-def _get_credentials():
-    token = os.environ.get("LINKEDIN_ACCESS_TOKEN", "").strip()
-    urn   = os.environ.get("LINKEDIN_PERSON_URN", "").strip()
+    # 1. دمج الصور في ملف PDF واحد (مطلوب لعمل سلايدر في لينكد إن)
+    pdf_path = "carousel.pdf"
+    imgs = [Image.open(img).convert('RGB') for img in image_paths]
+    # حفظ الصور كلها كصفحات في ملف الـ PDF
+    imgs[0].save(pdf_path, save_all=True, append_images=imgs[1:])
+    print("✅ تم تحويل الصور إلى ملف PDF بنجاح")
 
-    if not token:
-        raise ValueError("❌ LINKEDIN_ACCESS_TOKEN غير موجود في الأسرار")
-    if not urn:
-        raise ValueError("❌ LINKEDIN_PERSON_URN غير موجود في الأسرار")
-    return token, urn
-
-
-def _headers(token: str) -> dict:
-    return {
+    headers = {
         "Authorization": f"Bearer {token}",
-        "Content-Type":  "application/json",
         "X-Restli-Protocol-Version": "2.0.0",
+        "Content-Type": "application/json"
     }
 
-
-def _register_image(token: str, urn: str) -> tuple[str, str]:
-    """تسجيل صورة واحدة والحصول على رابط الرفع و asset URN."""
-    payload = {
+    # 2. تسجيل طلب رفع ملف (Document)
+    register_url = "https://api.linkedin.com/v2/assets?action=registerUpload"
+    register_data = {
         "registerUploadRequest": {
-            "recipes": ["urn:li:digitalmediaRecipe:feedshare-image"],
-            "owner": urn,
-            "serviceRelationships": [{
-                "relationshipType": "OWNER",
-                "identifier": "urn:li:userGeneratedContent"
-            }]
+            "recipes": ["urn:li:digitalmediaRecipe:feedshare-document"],
+            "owner": person_urn,
+            "serviceRelationships": [{"relationshipType": "OWNER", "identifier": "urn:li:userGeneratedContent"}]
         }
     }
-    req = urllib.request.Request(
-        f"{API_BASE}/assets?action=registerUpload",
-        data=json.dumps(payload).encode(),
-        headers=_headers(token),
-        method="POST",
-    )
-    with urllib.request.urlopen(req) as r:
-        data = json.loads(r.read())
+    
+    res = requests.post(register_url, headers=headers, json=register_data)
+    res.raise_for_status()
+    data = res.json()
+    
+    upload_url = data['value']['uploadMechanism']['com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest']['uploadUrl']
+    asset_urn = data['value']['asset']
 
-    upload_url = data["value"]["uploadMechanism"][
-        "com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"
-    ]["uploadUrl"]
-    asset_urn  = data["value"]["asset"]
-    return upload_url, asset_urn
+    # 3. رفع ملف الـ PDF فعلياً
+    print("⏳ جاري رفع الملف إلى لينكد إن...")
+    with open(pdf_path, 'rb') as f:
+        upload_res = requests.post(upload_url, headers={"Authorization": f"Bearer {token}"}, data=f)
+    upload_res.raise_for_status()
+    print("✅ تم رفع الملف بنجاح!")
 
-
-def _upload_image(upload_url: str, token: str, image_path: str):
-    """رفع ملف الصورة إلى الرابط المسجَّل."""
-    with open(image_path, "rb") as f:
-        image_data = f.read()
-    req = urllib.request.Request(
-        upload_url,
-        data=image_data,
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type":  "image/png",
+    # 4. إنشاء المنشور وربطه بالملف المرفوع
+    post_url = "https://api.linkedin.com/v2/ugcPosts"
+    post_data = {
+        "author": person_urn,
+        "lifecycleState": "PUBLISHED",
+        "specificContent": {
+            "com.linkedin.ugc.ShareContent": {
+                "shareCommentary": {"text": caption},
+                "shareMediaCategory": "DOCUMENT",
+                "media": [
+                    {
+                        "status": "READY",
+                        "media": asset_urn,
+                        "title": {"text": "تصفح الصور"}
+                    }
+                ]
+            }
         },
-        method="PUT",
-    )
-    with urllib.request.urlopen(req):
-        pass   # 201 Created
-
-
-def post_content(image_paths: list, caption: str):
-    """
-    نشر على LinkedIn:
-      - صورة واحدة إذا كان image_paths فيه عنصر واحد
-      - أول صورة فقط إذا كان كاروسيل (LinkedIn لا يدعم ألبوم API مجاناً)
-      - النص (caption) كـ commentary
-    """
-    token, urn = _get_credentials()
-
-    # LinkedIn يدعم صورة واحدة فقط في المنشور العادي عبر API
-    image_to_use = str(image_paths[0]) if image_paths else None
-
-    if image_to_use and Path(image_to_use).exists():
-        print(f"   ⬆️  رفع الصورة: {image_to_use}")
-        upload_url, asset_urn = _register_image(token, urn)
-        _upload_image(upload_url, token, image_to_use)
-        print(f"   ✅ الصورة جاهزة: {asset_urn}")
-
-        payload = {
-            "author":          urn,
-            "lifecycleState":  "PUBLISHED",
-            "specificContent": {
-                "com.linkedin.ugc.ShareContent": {
-                    "shareCommentary":    {"text": caption[:3000]},
-                    "shareMediaCategory": "IMAGE",
-                    "media": [{
-                        "status":      "READY",
-                        "description": {"text": caption[:200]},
-                        "media":        asset_urn,
-                        "title":        {"text": "منشور يومي"},
-                    }]
-                }
-            },
-            "visibility": {
-                "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-            }
-        }
-    else:
-        # نشر نصي فقط إذا لم تكن هناك صورة
-        print("   ℹ️  لا توجد صورة — نشر نصي فقط")
-        payload = {
-            "author":          urn,
-            "lifecycleState":  "PUBLISHED",
-            "specificContent": {
-                "com.linkedin.ugc.ShareContent": {
-                    "shareCommentary":    {"text": caption[:3000]},
-                    "shareMediaCategory": "NONE",
-                }
-            },
-            "visibility": {
-                "com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"
-            }
-        }
-
-    req = urllib.request.Request(
-        f"{API_BASE}/ugcPosts",
-        data=json.dumps(payload).encode(),
-        headers=_headers(token),
-        method="POST",
-    )
-    try:
-        with urllib.request.urlopen(req) as r:
-            result = json.loads(r.read())
-            print(f"   ✅ نُشر على LinkedIn: {result.get('id','')}")
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()
-        raise RuntimeError(f"❌ LinkedIn API error {e.code}: {body}")
+        "visibility": {"com.linkedin.ugc.MemberNetworkVisibility": "PUBLIC"}
+    }
+    
+    post_res = requests.post(post_url, headers=headers, json=post_data)
+    post_res.raise_for_status()
+    print("✅ تم النشر كسلايدر على LinkedIn بنجاح!")
