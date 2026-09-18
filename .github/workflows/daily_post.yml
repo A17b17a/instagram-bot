@@ -32,7 +32,7 @@ jobs:
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: |
-          python generate_carousel.py
+          python -u generate_carousel.py
 
       - name: Run Master Multi-Platform Poster
         env:
@@ -44,7 +44,7 @@ jobs:
           LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
           LINKEDIN_PERSON_URN: ${{ secrets.LINKEDIN_PERSON_URN }}
         run: |
-          python main.py
+          python -u main.py
 
       - name: Commit and Push Updated Topic History
         run: |
