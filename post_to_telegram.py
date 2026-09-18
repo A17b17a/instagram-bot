@@ -20,8 +20,7 @@ def post_album(image_paths, caption):
         media.append({
             "type": "photo",
             "media": f"attach://{file_key}",
-            "caption": caption if i == 0 else "", # وضع النص في الصورة الأولى فقط
-            "parse_mode": "HTML"
+            "caption": caption if i == 0 else "" # وضع النص في الصورة الأولى فقط
         })
         files[file_key] = open(img_path, 'rb')
         
