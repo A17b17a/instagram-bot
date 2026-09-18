@@ -62,24 +62,6 @@ def main():
         results["telegram"] = f"❌ فشل: {e}"
         print(f"❌ فشل تلغرام: {e}")
 
-    # ── LinkedIn ─────────────────────────────────────────────
-    print("\n💼 [LinkedIn] جاري النشر...")
-    # التحقق من وجود الـ Token قبل المحاولة
-    if not os.environ.get("LINKEDIN_ACCESS_TOKEN"):
-        results["linkedin"] = "⚠️ Token غير موجود في Secrets"
-        print("⚠️  LINKEDIN_ACCESS_TOKEN غير موجود، تم التخطي.")
-    else:
-        try:
-            import post_to_linkedin
-            post_to_linkedin.post_content(image_paths, caption)
-            results["linkedin"] = "✅ نجح"
-        except ImportError:
-            results["linkedin"] = "⚠️ ملف post_to_linkedin.py غير موجود"
-            print("⚠️  post_to_linkedin.py غير موجود، تم التخطي.")
-        except Exception as e:
-            results["linkedin"] = f"❌ فشل: {e}"
-            print(f"❌ فشل لينكد إن: {e}")
-
     # ── ملخص النتائج ─────────────────────────────────────────
     print("\n" + "=" * 50)
     print("--- ملخص النتائج ---")
