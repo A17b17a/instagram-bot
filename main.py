@@ -12,7 +12,8 @@ def get_caption() -> str:
 
 
 def get_images() -> list:
-    for pattern in ["output/*.png", "daily_post/*.png", "*.png"]:
+    # تم تحديث الأنماط للبحث عن صور JPG المناسبة لإنستغرام
+    for pattern in ["output/*.jpg", "output/*.jpeg", "daily_post/*.jpg", "*.jpg", "output/*.png"]:
         images = sorted(glob.glob(pattern))
         if images:
             return images
