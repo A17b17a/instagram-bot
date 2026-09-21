@@ -1,4 +1,4 @@
-import os
+\import os
 import json
 import random
 import requests
@@ -250,7 +250,12 @@ def render_slides_to_images(content):
             """
             
             page.set_content(html_content)
-            page.screenshot(path=str(OUTPUT_DIR / f"slide_{slide['slide_number']}.png"))
+            # تم تحويل نوع الحفظ إلى JPEG
+            page.screenshot(
+                path=str(OUTPUT_DIR / f"slide_{slide['slide_number']}.jpg"),
+                type="jpeg",
+                quality=95
+            )
 
         browser.close()
 
