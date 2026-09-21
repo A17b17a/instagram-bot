@@ -2,6 +2,12 @@ import os
 import glob
 import sys
 import requests
+import subprocess
+import time
+
+# بيانات المستودع الخاص بك على GitHub
+GITHUB_REPO = "A17b17a/instagram-bot"
+BRANCH = "main"
 
 def get_caption() -> str:
     for path in ["output/caption.txt", "caption.txt", "daily_post/caption.txt"]:
@@ -19,60 +25,18 @@ def get_images() -> list:
     return []
 
 
-def upload_image(file_path: str) -> str:
-    """رفع الصورة على سيرفرات سريعة ومفتوحة لسيرفرات إنستغرام وفيسبوك"""
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-    }
-
-    # 1. سيرفر Catbox (الأفضل والأضمن والمفتوح لسيرفرات فيسبوك وإنستغرام)
+def push_images_to_github():
+    """رفع الصور الموالدة إلى مستودع GitHub مباشرةً للحصول على روابط مستقرة"""
     try:
-        url = "https://catbox.moe/user/api.php"
-        data = {"reqtype": "fileupload"}
-        with open(file_path, "rb") as f:
-            res = requests.post(url, data=data, files={"fileToUpload": f}, headers=headers, timeout=30)
-        if res.status_code == 200 and res.text.startswith("http"):
-            direct_url = res.text.strip()
-            print(f"      🔗 تم الرفع بنجاح (Catbox): {direct_url}")
-            return direct_url
+        print("📦 جاري رفع الصور الموالدة إلى مستودع GitHub...")
+        subprocess.run(["git", "config", "user.name", "github-actions[bot]"], check=False)
+        subprocess.run(["git", "config", "user.email", "github-actions[bot]@users.noreply.github.com"], check=False)
+        subprocess.run(["git", "add", "output/"], check=False)
+        subprocess.run(["git", "commit", "-m", "Upload generated carousel images [skip ci]"], check=False)
+        subprocess.run(["git", "push"], check=False)
+        print("✅ تم رفع الصور على GitHub بنجاح!")
     except Exception as e:
-        print(f"      ⚠️ فشل Catbox: {e}")
-
-    # 2. سيرفر Pixeldrain (احتياطي)
-    try:
-        url = "https://pixeldrain.com/api/file"
-        with open(file_path, "rb") as f:
-            res = requests.post(url, files={"file": f}, headers=headers, timeout=30)
-        if res.status_code in [200, 201]:
-            data = res.json()
-            if data.get("success"):
-                file_id = data.get("id")
-                direct_url = f"https://pixeldrain.com/api/file/{file_id}"
-                print(f"      🔗 تم الرفع بنجاح (Pixeldrain): {direct_url}")
-                return direct_url
-    except Exception as e:
-        print(f"      ⚠️ فشل Pixeldrain: {e}")
-
-    # 3. سيرفر FreeImage (احتياطي ثاني)
-    try:
-        url = "https://freeimage.host/api/1/upload"
-        params = {
-            "key": "6d207e6418357803d36c09f476b8bcbf",
-            "action": "upload",
-            "format": "json"
-        }
-        with open(file_path, "rb") as f:
-            res = requests.post(url, data=params, files={"source": f}, headers=headers, timeout=30)
-        if res.status_code == 200:
-            data = res.json()
-            if data.get("status_code") == 200:
-                direct_url = data["image"]["url"]
-                print(f"      🔗 تم الرفع بنجاح (FreeImage): {direct_url}")
-                return direct_url
-    except Exception as e:
-        print(f"      ⚠️ فشل FreeImage: {e}")
-
-    raise Exception(f"تعذر رفع الصورة {file_path} على كافة السيرفرات")
+        print(f"⚠️ تنبيه Git: {e}")
 
 
 def post_to_make(image_paths: list, caption: str):
@@ -81,14 +45,22 @@ def post_to_make(image_paths: list, caption: str):
     if not webhook_url:
         raise Exception("لم يتم العثور على MAKE_WEBHOOK_URL في Secrets الخاص بـ GitHub!")
 
-    print("📤 جاري رفع الصور الموالدة للحصول على روابط مباشرة...")
-    image_urls = []
-    for idx, img_path in enumerate(image_paths):
-        print(f"   - رفع الصورة [{idx + 1}/{len(image_paths)}]: {img_path}")
-        url = upload_image(img_path)
-        image_urls.append(url)
+    # رفع الصور لـ GitHub أولاً
+    push_images_to_github()
 
-    print("📡 جاري إرسال البيانات والروابط الخمسة إلى Make Webhook...")
+    timestamp = int(time.time())
+    image_urls = []
+    
+    print("🔗 جاري تحويل مسارات الصور إلى روابط GitHub المباشرة...")
+    for img_path in image_paths:
+        # تنظيف المسار
+        clean_path = img_path.replace("\\", "/")
+        # بناء رابط Raw مباشر من GitHub
+        raw_url = f"https://raw.githubusercontent.com/{GITHUB_REPO}/{BRANCH}/{clean_path}?v={timestamp}"
+        image_urls.append(raw_url)
+        print(f"   - رابط الصورة: {raw_url}")
+
+    print("📡 جاري إرسال الروابط والكابشن إلى Make Webhook...")
     
     payload = {
         "caption": caption
@@ -107,7 +79,7 @@ def post_to_make(image_paths: list, caption: str):
 
 def main():
     print("=" * 50)
-    print("--- بدء عملية النشر الموحدة ---")
+    print("--- بدء عملية النشر الموحدة عبر GitHub Direct ---")
     print("=" * 50)
 
     caption     = get_caption()
@@ -123,7 +95,7 @@ def main():
     results = {}
 
     # ── Make (Instagram Carousel) ─────────────────────────────
-    print("\n📸 [Make Webhook] جاري رفع الصور وإرسال المحتوى...")
+    print("\n📸 [Make Webhook] جاري التجهيز والإرسال...")
     try:
         post_to_make(image_paths, caption)
         results["make_webhook"] = "✅ نجح"
