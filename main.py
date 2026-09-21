@@ -20,17 +20,47 @@ def get_images() -> list:
 
 
 def upload_image(file_path: str) -> str:
-    """رفع الصورة تلقائياً للحصول على رابط مباشر قابل للنشر على إنستغرام"""
-    url = "https://catbox.moe/user/api.php"
-    data = {"reqtype": "fileupload"}
+    """رفع الصورة تلقائياً للحصول على رابط مباشر مع سيرفرات احتياطية وهيدرات حقيقية"""
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
     
-    with open(file_path, "rb") as f:
-        res = requests.post(url, data=data, files={"fileToUpload": f}, timeout=30)
-    
-    if res.status_code == 200 and res.text.startswith("http"):
-        return res.text.strip()
-    else:
-        raise Exception(f"فشل رفع الصورة {file_path}: {res.text}")
+    # 1. المحاولة الأولى: سيرفر Tmpfiles المباشر
+    try:
+        url = "https://tmpfiles.org/api/v1/upload"
+        with open(file_path, "rb") as f:
+            res = requests.post(url, files={"file": f}, headers=headers, timeout=20)
+        if res.status_code == 200:
+            data = res.json()
+            if data.get("status") == "success":
+                raw_url = data["data"]["url"]
+                return raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
+    except Exception:
+        pass
+
+    # 2. المحاولة الثانية: سيرفر Catbox مع هيدر متصفح
+    try:
+        url = "https://catbox.moe/user/api.php"
+        data = {"reqtype": "fileupload"}
+        with open(file_path, "rb") as f:
+            res = requests.post(url, data=data, files={"fileToUpload": f}, headers=headers, timeout=30)
+        if res.status_code == 200 and res.text.startswith("http"):
+            return res.text.strip()
+    except Exception:
+        pass
+
+    # 3. المحاولة الثالثة: سيرفر Litterbox الاحتياطي
+    try:
+        url = "https://litterbox.catbox.moe/resources/internals/api.php"
+        data = {"reqtype": "fileupload", "time": "1h"}
+        with open(file_path, "rb") as f:
+            res = requests.post(url, data=data, files={"fileToUpload": f}, headers=headers, timeout=30)
+        if res.status_code == 200 and res.text.startswith("http"):
+            return res.text.strip()
+    except Exception:
+        pass
+
+    raise Exception(f"تعذر رفع الصورة {file_path} على كافة السيرفرات")
 
 
 def post_to_make(image_paths: list, caption: str):
@@ -48,12 +78,10 @@ def post_to_make(image_paths: list, caption: str):
 
     print("📡 جاري إرسال البيانات والروابط الخمسة إلى Make Webhook...")
     
-    # تجهيز حزمة البيانات بـ JSON لـ Make.com
     payload = {
         "caption": caption
     }
     
-    # إرسال روابط الصور كـ image_1, image_2, image_3, image_4, image_5
     for i, url in enumerate(image_urls):
         payload[f"image_{i+1}"] = url
 
@@ -75,10 +103,6 @@ def main():
 
     if not image_paths:
         print("❌ لا توجد صور للنشر!")
-        print("الملفات في المجلد الحالي:", os.listdir("."))
-        for d in ["output", "daily_post"]:
-            if os.path.exists(d):
-                print(f"الملفات في {d}/:", os.listdir(d))
         sys.exit(1)
 
     print(f"📸 عدد الصور: {len(image_paths)}")
