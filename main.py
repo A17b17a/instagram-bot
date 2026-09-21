@@ -1,6 +1,7 @@
 import os
 import glob
 import sys
+import requests
 
 def get_caption() -> str:
     for path in ["output/caption.txt", "caption.txt", "daily_post/caption.txt"]:
@@ -16,6 +17,28 @@ def get_images() -> list:
         if images:
             return images
     return []
+
+
+def post_to_make(image_paths: list, caption: str):
+    webhook_url = os.environ.get("WEBHOOK_URL")
+    if not webhook_url:
+        raise Exception("لم يتم العثور على WEBHOOK_URL في Secrets الخاص بـ GitHub!")
+
+    print("📡 جاري إرسال البيانات والصور إلى Make Webhook...")
+    
+    data = {"caption": caption}
+    files = {}
+    
+    # فتح الصورة الأولى لإرسالها مع الطلب
+    if image_paths and os.path.exists(image_paths[0]):
+        files = {"file": open(image_paths[0], "rb")}
+
+    response = requests.post(webhook_url, data=data, files=files)
+
+    if response.status_code in [200, 201, 204]:
+        print("✅ تم إرسال البيانات بنجاح إلى Make!")
+    else:
+        raise Exception(f"فشل الإرسال إلى Make (كود الاستجابة: {response.status_code})")
 
 
 def main():
@@ -39,15 +62,14 @@ def main():
 
     results = {}
 
-    # ── Instagram ────────────────────────────────────────────
-    print("\n📸 [Instagram] جاري النشر...")
+    # ── Make (Instagram & Platforms) ─────────────────────────
+    print("\n📸 [Make Webhook] جاري إرسال المحتوى...")
     try:
-        import post_to_instagram
-        post_to_instagram.post_carousel(image_paths, caption)
-        results["instagram"] = "✅ نجح"
+        post_to_make(image_paths, caption)
+        results["make_webhook"] = "✅ نجح"
     except Exception as e:
-        results["instagram"] = f"❌ فشل: {e}"
-        print(f"❌ فشل انستغرام: {e}")
+        results["make_webhook"] = f"❌ فشل: {e}"
+        print(f"❌ فشل الإرسال لـ Make: {e}")
 
     # ── Telegram ─────────────────────────────────────────────
     print("\n✈️  [Telegram] جاري النشر...")
@@ -69,7 +91,6 @@ def main():
         print(f"  {platform:12s}: {status}")
     print("=" * 50)
 
-    # فشل الـ workflow فقط إذا فشلت جميع المنصات
     all_failed = all("❌" in s for s in results.values())
     if all_failed:
         print("\n❌ فشلت جميع المنصات!")
