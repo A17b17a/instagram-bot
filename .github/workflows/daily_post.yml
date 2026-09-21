@@ -1,55 +1,43 @@
 name: Daily Multi-Platform Auto Poster
 
 on:
-  workflow_dispatch:
   schedule:
-    - cron: '0 15 * * *'
-
-permissions:
-  contents: write
+    - cron: '0 8 * * *'
+  workflow_dispatch:
 
 jobs:
   post:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
-      - name: Set up Python 3.11
-        uses: actions/setup-python@v5
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install instagrapi playwright requests pydantic
-          playwright install chromium
-          playwright install-deps chromium
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
       - name: Generate Content via Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: |
-          python -u generate_carousel.py
+        run: python generate_carousel.py
 
       - name: Run Master Multi-Platform Poster
         env:
-          INSTAGRAM_USERNAME: ${{ secrets.INSTAGRAM_USERNAME }}
-          INSTAGRAM_PASSWORD: ${{ secrets.INSTAGRAM_PASSWORD }}
-          INSTAGRAM_SESSION_JSON: ${{ secrets.INSTAGRAM_SESSION_JSON }}
+          MAKE_WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
+          WEBHOOK_URL: ${{ secrets.MAKE_WEBHOOK_URL }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
-          LINKEDIN_PERSON_URN: ${{ secrets.LINKEDIN_PERSON_URN }}
-        run: |
-          python -u main.py
+        run: python main.py
 
       - name: Commit and Push Updated Topic History
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add used_topics.json
-          git commit -m "Update used_topics.json history [skip ci]" || echo "No history changes to commit"
-          git push
+          git config --global user.email "github-actions@users.noreply.github.com"
+          git add used_topics.json || true
+          git diff --quiet && git diff --staged --quiet || (git commit -m "Update used_topics.json history" && git push)
