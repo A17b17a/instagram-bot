@@ -12,7 +12,6 @@ def get_caption() -> str:
 
 
 def get_images() -> list:
-    # تم تحديث الأنماط للبحث عن صور JPG المناسبة لإنستغرام
     for pattern in ["output/*.jpg", "output/*.jpeg", "daily_post/*.jpg", "*.jpg", "output/*.png"]:
         images = sorted(glob.glob(pattern))
         if images:
@@ -21,39 +20,48 @@ def get_images() -> list:
 
 
 def upload_image(file_path: str) -> str:
-    """رفع الصورة تلقائياً للحصول على رابط مباشر مع سيرفرات احتياطية وهيدرات حقيقية"""
+    """رفع الصورة على سيرفرات متوافقة 100% مع سيرفرات إنستغرام وفيسبوك"""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
-    # 1. المحاولة الأولى: سيرفر Tmpfiles المباشر
+    # 1. المحاولة الأولى: سيرفر Telegraph (مباشر وسريع ومقبول 100% من فيسبوك وإنستغرام)
     try:
-        url = "https://tmpfiles.org/api/v1/upload"
+        url = "https://telegra.ph/upload"
         with open(file_path, "rb") as f:
-            res = requests.post(url, files={"file": f}, headers=headers, timeout=20)
+            res = requests.post(url, files={"file": ("slide.jpg", f, "image/jpeg")}, headers=headers, timeout=20)
         if res.status_code == 200:
             data = res.json()
-            if data.get("status") == "success":
-                raw_url = data["data"]["url"]
-                return raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
-    except Exception:
-        pass
+            if isinstance(data, list) and len(data) > 0 and "src" in data[0]:
+                direct_url = "https://telegra.ph" + data[0]["src"]
+                print(f"      🔗 تم الرفع بنجاح (Telegraph): {direct_url}")
+                return direct_url
+    except Exception as e:
+        print(f"      ⚠️ فشل سيرفر Telegraph: {e}")
 
-    # 2. المحاولة الثانية: سيرفر Catbox مع هيدر متصفح
+    # 2. المحاولة الثانية: سيرفر FreeImage الاحتياطي
+    try:
+        url = "https://freeimage.host/api/1/upload"
+        params = {
+            "key": "6d207e6418357803d36c09f476b8bcbf",
+            "action": "upload",
+            "format": "json"
+        }
+        with open(file_path, "rb") as f:
+            res = requests.post(url, data=params, files={"source": f}, headers=headers, timeout=20)
+        if res.status_code == 200:
+            data = res.json()
+            if data.get("status_code") == 200:
+                direct_url = data["image"]["url"]
+                print(f"      🔗 تم الرفع بنجاح (FreeImage): {direct_url}")
+                return direct_url
+    except Exception as e:
+        print(f"      ⚠️ فشل سيرفر FreeImage: {e}")
+
+    # 3. المحاولة الثالثة: Catbox كخيار أخير
     try:
         url = "https://catbox.moe/user/api.php"
         data = {"reqtype": "fileupload"}
-        with open(file_path, "rb") as f:
-            res = requests.post(url, data=data, files={"fileToUpload": f}, headers=headers, timeout=30)
-        if res.status_code == 200 and res.text.startswith("http"):
-            return res.text.strip()
-    except Exception:
-        pass
-
-    # 3. المحاولة الثالثة: سيرفر Litterbox الاحتياطي
-    try:
-        url = "https://litterbox.catbox.moe/resources/internals/api.php"
-        data = {"reqtype": "fileupload", "time": "1h"}
         with open(file_path, "rb") as f:
             res = requests.post(url, data=data, files={"fileToUpload": f}, headers=headers, timeout=30)
         if res.status_code == 200 and res.text.startswith("http"):
