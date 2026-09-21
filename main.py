@@ -2,7 +2,6 @@ import os
 import glob
 import sys
 import requests
-import base64
 
 def get_caption() -> str:
     for path in ["output/caption.txt", "caption.txt", "daily_post/caption.txt"]:
@@ -21,31 +20,29 @@ def get_images() -> list:
 
 
 def upload_image(file_path: str) -> str:
-    """رفع الصورة على سيرفرات عالمية متوافقة 100% مع GitHub Actions وإنستغرام"""
+    """رفع الصورة على سيرفرات سريعة ومفتوحة لسيرفرات إنستغرام وفيسبوك"""
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
-    # 1. المحاولة الأولى: ImgBB (الأقوى والأكثر توافقاً مع إنستغرام وفيسبوك)
+    # 1. سيرفر Catbox (الأفضل والأضمن والمفتوح لسيرفرات فيسبوك وإنستغرام)
     try:
-        url = "https://api.imgbb.com/1/upload"
+        url = "https://catbox.moe/user/api.php"
+        data = {"reqtype": "fileupload"}
         with open(file_path, "rb") as f:
-            b64_data = base64.b64encode(f.read()).decode('utf-8')
-        res = requests.post(url, data={"key": "320e883e408d6c70b8a4f2157053e180", "image": b64_data}, timeout=25)
-        if res.status_code == 200:
-            data = res.json()
-            if data.get("success"):
-                direct_url = data["data"]["url"]
-                print(f"      🔗 تم الرفع بنجاح (ImgBB): {direct_url}")
-                return direct_url
+            res = requests.post(url, data=data, files={"fileToUpload": f}, headers=headers, timeout=30)
+        if res.status_code == 200 and res.text.startswith("http"):
+            direct_url = res.text.strip()
+            print(f"      🔗 تم الرفع بنجاح (Catbox): {direct_url}")
+            return direct_url
     except Exception as e:
-        print(f"      ⚠️ فشل سيرفر ImgBB: {e}")
+        print(f"      ⚠️ فشل Catbox: {e}")
 
-    # 2. المحاولة الثانية: Pixeldrain (مباشر وسريع جداً)
+    # 2. سيرفر Pixeldrain (احتياطي)
     try:
         url = "https://pixeldrain.com/api/file"
         with open(file_path, "rb") as f:
-            res = requests.post(url, files={"file": f}, timeout=25)
+            res = requests.post(url, files={"file": f}, headers=headers, timeout=30)
         if res.status_code in [200, 201]:
             data = res.json()
             if data.get("success"):
@@ -54,35 +51,26 @@ def upload_image(file_path: str) -> str:
                 print(f"      🔗 تم الرفع بنجاح (Pixeldrain): {direct_url}")
                 return direct_url
     except Exception as e:
-        print(f"      ⚠️ فشل سيرفر Pixeldrain: {e}")
+        print(f"      ⚠️ فشل Pixeldrain: {e}")
 
-    # 3. المحاولة الثالثة: Tmpfiles لرابط مباشر دائم
+    # 3. سيرفر FreeImage (احتياطي ثاني)
     try:
-        url = "https://tmpfiles.org/api/v1/upload"
+        url = "https://freeimage.host/api/1/upload"
+        params = {
+            "key": "6d207e6418357803d36c09f476b8bcbf",
+            "action": "upload",
+            "format": "json"
+        }
         with open(file_path, "rb") as f:
-            res = requests.post(url, files={"file": f}, timeout=25)
+            res = requests.post(url, data=params, files={"source": f}, headers=headers, timeout=30)
         if res.status_code == 200:
             data = res.json()
-            if data.get("status") == "success":
-                raw_url = data["data"]["url"]
-                direct_url = raw_url.replace("tmpfiles.org/", "tmpfiles.org/dl/")
-                print(f"      🔗 تم الرفع بنجاح (Tmpfiles Direct): {direct_url}")
+            if data.get("status_code") == 200:
+                direct_url = data["image"]["url"]
+                print(f"      🔗 تم الرفع بنجاح (FreeImage): {direct_url}")
                 return direct_url
     except Exception as e:
-        print(f"      ⚠️ فشل سيرفر Tmpfiles: {e}")
-
-    # 4. المحاولة الرابعة: Litterbox
-    try:
-        url = "https://litterbox.catbox.moe/resources/internals/api.php"
-        data = {"reqtype": "fileupload", "time": "1h"}
-        with open(file_path, "rb") as f:
-            res = requests.post(url, data=data, files={"fileToUpload": f}, headers=headers, timeout=25)
-        if res.status_code == 200 and res.text.startswith("http"):
-            direct_url = res.text.strip()
-            print(f"      🔗 تم الرفع بنجاح (Litterbox): {direct_url}")
-            return direct_url
-    except Exception as e:
-        print(f"      ⚠️ فشل سيرفر Litterbox: {e}")
+        print(f"      ⚠️ فشل FreeImage: {e}")
 
     raise Exception(f"تعذر رفع الصورة {file_path} على كافة السيرفرات")
 
