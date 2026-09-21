@@ -20,9 +20,11 @@ def get_images() -> list:
 
 
 def post_to_make(image_paths: list, caption: str):
-    webhook_url = os.environ.get("WEBHOOK_URL")
+    # جلب رابط الـ Webhook سواء باسم MAKE_WEBHOOK_URL أو WEBHOOK_URL
+    webhook_url = os.environ.get("MAKE_WEBHOOK_URL") or os.environ.get("WEBHOOK_URL")
+    
     if not webhook_url:
-        raise Exception("لم يتم العثور على WEBHOOK_URL في Secrets الخاص بـ GitHub!")
+        raise Exception("لم يتم العثور على MAKE_WEBHOOK_URL في Secrets الخاص بـ GitHub!")
 
     print("📡 جاري إرسال البيانات والصور إلى Make Webhook...")
     
