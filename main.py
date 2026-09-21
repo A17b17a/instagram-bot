@@ -19,26 +19,48 @@ def get_images() -> list:
     return []
 
 
+def upload_image(file_path: str) -> str:
+    """رفع الصورة تلقائياً للحصول على رابط مباشر قابل للنشر على إنستغرام"""
+    url = "https://catbox.moe/user/api.php"
+    data = {"reqtype": "fileupload"}
+    
+    with open(file_path, "rb") as f:
+        res = requests.post(url, data=data, files={"fileToUpload": f}, timeout=30)
+    
+    if res.status_code == 200 and res.text.startswith("http"):
+        return res.text.strip()
+    else:
+        raise Exception(f"فشل رفع الصورة {file_path}: {res.text}")
+
+
 def post_to_make(image_paths: list, caption: str):
-    # جلب رابط الـ Webhook سواء باسم MAKE_WEBHOOK_URL أو WEBHOOK_URL
     webhook_url = os.environ.get("MAKE_WEBHOOK_URL") or os.environ.get("WEBHOOK_URL")
     
     if not webhook_url:
         raise Exception("لم يتم العثور على MAKE_WEBHOOK_URL في Secrets الخاص بـ GitHub!")
 
-    print("📡 جاري إرسال البيانات والصور إلى Make Webhook...")
-    
-    data = {"caption": caption}
-    files = {}
-    
-    # فتح الصورة الأولى لإرسالها مع الطلب
-    if image_paths and os.path.exists(image_paths[0]):
-        files = {"file": open(image_paths[0], "rb")}
+    print("📤 جاري رفع الصور الموالدة للحصول على روابط مباشرة...")
+    image_urls = []
+    for idx, img_path in enumerate(image_paths):
+        print(f"   - رفع الصورة [{idx + 1}/{len(image_paths)}]: {img_path}")
+        url = upload_image(img_path)
+        image_urls.append(url)
 
-    response = requests.post(webhook_url, data=data, files=files)
+    print("📡 جاري إرسال البيانات والروابط الخمسة إلى Make Webhook...")
+    
+    # تجهيز حزمة البيانات بـ JSON لـ Make.com
+    payload = {
+        "caption": caption
+    }
+    
+    # إرسال روابط الصور كـ image_1, image_2, image_3, image_4, image_5
+    for i, url in enumerate(image_urls):
+        payload[f"image_{i+1}"] = url
+
+    response = requests.post(webhook_url, json=payload, timeout=30)
 
     if response.status_code in [200, 201, 204]:
-        print("✅ تم إرسال البيانات بنجاح إلى Make!")
+        print("✅ تم إرسال البيانات والروابط بنجاح إلى Make!")
     else:
         raise Exception(f"فشل الإرسال إلى Make (كود الاستجابة: {response.status_code})")
 
@@ -64,8 +86,8 @@ def main():
 
     results = {}
 
-    # ── Make (Instagram & Platforms) ─────────────────────────
-    print("\n📸 [Make Webhook] جاري إرسال المحتوى...")
+    # ── Make (Instagram Carousel) ─────────────────────────────
+    print("\n📸 [Make Webhook] جاري رفع الصور وإرسال المحتوى...")
     try:
         post_to_make(image_paths, caption)
         results["make_webhook"] = "✅ نجح"
