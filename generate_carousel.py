@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import time
 import requests
 from pathlib import Path
 from playwright.sync_api import sync_playwright
@@ -132,18 +133,36 @@ def generate_content_with_gemini():
     payload = {"contents": [{"parts": [{"text": prompt}]}]}
     raw_text = None
     last_error = None
+    max_retries_per_model = 3
 
     for model in models_to_try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        try:
-            res = requests.post(url, json=payload, headers=headers, timeout=30)
-            if res.status_code == 200:
-                raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
+        model_succeeded = False
+
+        for attempt in range(max_retries_per_model):
+            try:
+                res = requests.post(url, json=payload, headers=headers, timeout=30)
+                if res.status_code == 200:
+                    raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
+                    model_succeeded = True
+                    break
+                elif res.status_code == 429:
+                    last_error = f"Model {model} -> Status 429 (rate limited)"
+                    if attempt < max_retries_per_model - 1:
+                        wait_time = (attempt + 1) * 30
+                        print(f"⏳ {model} rate limited, waiting {wait_time}s before retry...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"⚠️ {model} still rate limited after {max_retries_per_model} attempts, moving to next model...")
+                else:
+                    last_error = f"Model {model} -> Status {res.status_code}"
+                    break  # non-429 error, no point retrying this model
+            except Exception as e:
+                last_error = str(e)
                 break
-            else:
-                last_error = f"Model {model} -> Status {res.status_code}"
-        except Exception as e:
-            last_error = str(e)
+
+        if model_succeeded:
+            break
 
     if not raw_text:
         raise Exception(f"❌ Failed to generate content via Gemini API: {last_error}")
