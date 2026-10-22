@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import re
 import time
 import requests
 from pathlib import Path
@@ -32,6 +33,33 @@ COLOR_THEMES = [
     {"bg": "#FFFBEB", "card_bg": "#FFFFFF", "primary": "#D97706", "accent": "#FFFBEB", "text": "#1E293B", "border": "#F59E0B"}
 ]
 
+# ============================================================
+# دالة إصلاح JSON المكسور (شاملة)
+# ============================================================
+def fix_json(text):
+    # 1. شيل backticks وعلامات markdown
+    text = re.sub(r'^```(?:json)?\s*', '', text, flags=re.MULTILINE)
+    text = re.sub(r'\s*```$', '', text, flags=re.MULTILINE)
+
+    # 2. استخرج أول {} كامل
+    match = re.search(r'\{.*\}', text, re.DOTALL)
+    if match:
+        text = match.group(0)
+
+    # 3. شيل الشرطة - أو * أو • في بداية السطر قبل المفاتيح
+    text = re.sub(r'^\s*[-*•]\s*(?=")', '', text, flags=re.MULTILINE)
+
+    # 4. إصلاح المفاتيح اللي تنقصها علامة الاقتباس الأولى
+    text = re.sub(r'(?<=[{\s,\[])([a-zA-Z_][a-zA-Z0-9_]*)(?="\s*:)', r'"\1', text)
+
+    # 5. إزالة الفواصل الزايدة قبل إغلاق الأقواس
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
+    # 6. شيل تعليقات // داخل الـ JSON
+    text = re.sub(r'//[^\n"]*\n', '\n', text)
+
+    return text.strip()
+
 def load_history():
     if HISTORY_FILE.exists():
         try:
@@ -49,7 +77,16 @@ def get_available_models(headers):
         res = requests.get(url, headers=headers, timeout=15)
         if res.status_code == 200:
             models = res.json().get("models", [])
-            return [m["name"].replace("models/", "") for m in models if "generateContent" in m.get("supportedGenerationMethods", [])]
+            # فلتر: flash وpro فقط، وبدون موديلات الصوت والصور
+            filtered = []
+            for m in models:
+                name = m["name"].replace("models/", "")
+                methods = m.get("supportedGenerationMethods", [])
+                if "generateContent" in methods and ("flash" in name or "pro" in name):
+                    # استثني موديلات الصوت والصور
+                    if not any(x in name for x in ["tts", "image", "vision", "audio", "embed"]):
+                        filtered.append(name)
+            return filtered
     except Exception:
         pass
     return []
@@ -64,10 +101,18 @@ def generate_content_with_gemini():
     }
 
     available_models = get_available_models(headers)
-    fallback_models = ["gemini-2.0-flash", "gemini-2.5-flash", "gemini-1.5-flash"]
-    models_to_try = [m for m in available_models if "flash" in m] + available_models + fallback_models
+    fallback_models = ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
+    
+    # رتّب: flash أولاً، ثم الباقي، ثم الاحتياطي
+    flash_models = [m for m in available_models if "flash" in m]
+    other_models = [m for m in available_models if "flash" not in m]
+    models_to_try = flash_models + other_models + fallback_models
+    
+    # أزل المكررات مع الحفاظ على الترتيب
     seen = set()
     models_to_try = [m for m in models_to_try if not (m in seen or seen.add(m))]
+    
+    print(f"الموديلات المتاحة للمحاولة: {models_to_try[:5]}...")
 
     history = load_history()
     category = random.choice(CATEGORIES)
@@ -83,7 +128,9 @@ def generate_content_with_gemini():
     شروط صارمة للمحتوى والإملاء:
     1. اكتب بلغة عربية فصيحة ومفهومة وسليمة 100% بدون أي أخطاء إملائية أو مطبعية أو كلمات مبتورة.
     2. تأكد من أن كل العبارات الإنجليزية مكتوبة بشكل صحيح وموضوعة داخل وسم <span dir="ltr"> الجملة الإنجليزية </span> لكي لا تختلط باللغة العربية.
-    3. الرد يكون JSON فقط بدون أية نصوص خارجية أو markdown.
+    3. الرد يكون JSON خام فقط بدون أية نصوص خارجية أو markdown أو backticks.
+    4. لا تضع شرطة - أو نجمة * قبل أسماء المفاتيح إطلاقاً.
+    5. جميع المفاتيح يجب أن تكون بين علامتي اقتباس مزدوجة ".
 
     شكل الـ JSON المطلوب:
     {{
@@ -141,22 +188,31 @@ def generate_content_with_gemini():
 
         for attempt in range(max_retries_per_model):
             try:
-                res = requests.post(url, json=payload, headers=headers, timeout=30)
+                res = requests.post(url, json=payload, headers=headers, timeout=60)
                 if res.status_code == 200:
                     raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
+                    print(f"✅ نجح الاتصال عبر: {model}")
                     model_succeeded = True
                     break
                 elif res.status_code == 429:
                     last_error = f"Model {model} -> Status 429 (rate limited)"
                     if attempt < max_retries_per_model - 1:
                         wait_time = (attempt + 1) * 30
-                        print(f"⏳ {model} rate limited, waiting {wait_time}s before retry...")
+                        print(f"⏳ {model} rate limited, waiting {wait_time}s...")
                         time.sleep(wait_time)
                     else:
-                        print(f"⚠️ {model} still rate limited after {max_retries_per_model} attempts, moving to next model...")
+                        print(f"⚠️ {model} لا يزال محدوداً، الانتقال للموديل التالي...")
+                elif res.status_code in [503, 500]:
+                    last_error = f"Model {model} -> Status {res.status_code} (server busy)"
+                    if attempt < max_retries_per_model - 1:
+                        wait_time = (attempt + 1) * 15
+                        print(f"⏳ {model} مشغول، انتظار {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        print(f"⚠️ {model} لا يستجيب، الانتقال للتالي...")
                 else:
                     last_error = f"Model {model} -> Status {res.status_code}"
-                    break  # non-429 error, no point retrying this model
+                    break
             except Exception as e:
                 last_error = str(e)
                 break
@@ -167,8 +223,25 @@ def generate_content_with_gemini():
     if not raw_text:
         raise Exception(f"❌ Failed to generate content via Gemini API: {last_error}")
 
-    cleaned_text = raw_text.replace("```json", "").replace("```", "").strip()
-    content = json.loads(cleaned_text)
+    # ============================================================
+    # تحليل JSON مع إصلاح تلقائي شامل
+    # ============================================================
+    # المحاولة الأولى: مباشرة
+    try:
+        content = json.loads(raw_text)
+        print("✅ تم تحليل JSON مباشرة!")
+    except json.JSONDecodeError:
+        print("⚠️ JSON مكسور، جاري الإصلاح التلقائي...")
+        fixed_text = fix_json(raw_text)
+        try:
+            content = json.loads(fixed_text)
+            print("✅ تم إصلاح JSON بنجاح!")
+        except json.JSONDecodeError as e:
+            print("❌ فشل إصلاح JSON. النص الخام:")
+            print(raw_text[:500])
+            print("النص بعد الإصلاح:")
+            print(fixed_text[:500])
+            raise e
 
     history.append(content["topic_title"])
     save_history(history)
@@ -269,7 +342,6 @@ def render_slides_to_images(content):
             """
             
             page.set_content(html_content)
-            # تم تحويل نوع الحفظ إلى JPEG
             page.screenshot(
                 path=str(OUTPUT_DIR / f"slide_{slide['slide_number']}.jpg"),
                 type="jpeg",
