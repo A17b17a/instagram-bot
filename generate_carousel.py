@@ -106,6 +106,13 @@ def generate_content_with_gemini():
     # رتّب: flash أولاً، ثم الباقي، ثم الاحتياطي
     flash_models = [m for m in available_models if "flash" in m]
     other_models = [m for m in available_models if "flash" not in m]
+    # الأفضلية: 2.5-flash أولاً، ثم باقي flash المستقرة، وlite/preview في الآخر
+    def model_rank(m):
+        if m == "gemini-2.5-flash": return 0
+        if "lite" in m: return 3
+        if "preview" in m or "exp" in m: return 2
+        return 1
+    flash_models = sorted(flash_models, key=model_rank)
     models_to_try = flash_models + other_models + fallback_models
     
     # أزل المكررات مع الحفاظ على الترتيب
@@ -123,7 +130,7 @@ def generate_content_with_gemini():
     التصنيف: {category}
 
     المواضيع السابقة (يمنع التكرار):
-    {json.dumps(history, ensure_ascii=False)}
+    {json.dumps(history[-60:], ensure_ascii=False)}
 
     شروط صارمة للمحتوى والإملاء:
     1. اكتب بلغة عربية فصيحة ومفهومة وسليمة 100% بدون أي أخطاء إملائية أو مطبعية أو كلمات مبتورة.
@@ -177,76 +184,90 @@ def generate_content_with_gemini():
     }}
     """
 
-    payload = {"contents": [{"parts": [{"text": prompt}]}]}
-    raw_text = None
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "responseMimeType": "application/json",
+            "maxOutputTokens": 16384,
+            "temperature": 0.8,
+        },
+    }
+
+    def parse_json(text):
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            print("⚠️ JSON مكسور، جاري الإصلاح التلقائي...")
+            return json.loads(fix_json(text))
+
     last_error = None
     max_retries_per_model = 3
 
     for model in models_to_try:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
-        model_succeeded = False
 
         for attempt in range(max_retries_per_model):
             try:
-                res = requests.post(url, json=payload, headers=headers, timeout=60)
-                if res.status_code == 200:
-                    raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
-                    print(f"✅ نجح الاتصال عبر: {model}")
-                    model_succeeded = True
-                    break
-                elif res.status_code == 429:
-                    last_error = f"Model {model} -> Status 429 (rate limited)"
-                    if attempt < max_retries_per_model - 1:
-                        wait_time = (attempt + 1) * 30
-                        print(f"⏳ {model} rate limited, waiting {wait_time}s...")
-                        time.sleep(wait_time)
-                    else:
-                        print(f"⚠️ {model} لا يزال محدوداً، الانتقال للموديل التالي...")
-                elif res.status_code in [503, 500]:
-                    last_error = f"Model {model} -> Status {res.status_code} (server busy)"
-                    if attempt < max_retries_per_model - 1:
-                        wait_time = (attempt + 1) * 15
-                        print(f"⏳ {model} مشغول، انتظار {wait_time}s...")
-                        time.sleep(wait_time)
-                    else:
-                        print(f"⚠️ {model} لا يستجيب، الانتقال للتالي...")
-                else:
-                    last_error = f"Model {model} -> Status {res.status_code}"
-                    break
+                res = requests.post(url, json=payload, headers=headers, timeout=120)
             except Exception as e:
-                last_error = str(e)
+                last_error = f"{model} -> {e}"
                 break
 
-        if model_succeeded:
-            break
+            if res.status_code == 200:
+                try:
+                    cand = res.json()['candidates'][0]
+                    finish = cand.get('finishReason')
+                    parts = cand.get('content', {}).get('parts', [])
+                    raw_text = "".join(p.get('text', '') for p in parts)
+                except Exception as e:
+                    last_error = f"{model} -> رد غير متوقع: {e}"
+                    print(f"⚠️ {last_error}")
+                    continue
 
-    if not raw_text:
-        raise Exception(f"❌ Failed to generate content via Gemini API: {last_error}")
+                print(f"📡 {model} | finishReason={finish} | طول الرد={len(raw_text)}")
+                if finish not in (None, "STOP"):
+                    last_error = f"{model} -> finishReason={finish}"
+                    print(f"⚠️ الرد غير مكتمل ({finish})، إعادة المحاولة...")
+                    time.sleep(3)
+                    continue
 
-    # ============================================================
-    # تحليل JSON مع إصلاح تلقائي شامل
-    # ============================================================
-    # المحاولة الأولى: مباشرة
-    try:
-        content = json.loads(raw_text)
-        print("✅ تم تحليل JSON مباشرة!")
-    except json.JSONDecodeError:
-        print("⚠️ JSON مكسور، جاري الإصلاح التلقائي...")
-        fixed_text = fix_json(raw_text)
-        try:
-            content = json.loads(fixed_text)
-            print("✅ تم إصلاح JSON بنجاح!")
-        except json.JSONDecodeError as e:
-            print("❌ فشل إصلاح JSON. النص الخام:")
-            print(raw_text[:500])
-            print("النص بعد الإصلاح:")
-            print(fixed_text[:500])
-            raise e
+                try:
+                    content = parse_json(raw_text)
+                    if not content.get("slides") or not content.get("topic_title"):
+                        raise ValueError("JSON ناقص: slides أو topic_title مفقود")
+                    print(f"✅ نجح التوليد عبر: {model}")
+                    history.append(content["topic_title"])
+                    save_history(history)
+                    return content
+                except (json.JSONDecodeError, ValueError) as e:
+                    last_error = f"{model} -> JSON غير صالح: {e}"
+                    print(f"⚠️ {last_error}")
+                    print(raw_text[:300])
+                    time.sleep(3)
+                    continue
 
-    history.append(content["topic_title"])
-    save_history(history)
+            elif res.status_code == 429:
+                last_error = f"{model} -> 429 (rate limited)"
+                if attempt < max_retries_per_model - 1:
+                    wait_time = (attempt + 1) * 30
+                    print(f"⏳ {model} rate limited, waiting {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"⚠️ {model} لا يزال محدوداً، الانتقال للتالي...")
+            elif res.status_code in (500, 503):
+                last_error = f"{model} -> {res.status_code} (server busy)"
+                if attempt < max_retries_per_model - 1:
+                    wait_time = (attempt + 1) * 15
+                    print(f"⏳ {model} مشغول، انتظار {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"⚠️ {model} لا يستجيب، الانتقال للتالي...")
+            else:
+                last_error = f"{model} -> {res.status_code}: {res.text[:200]}"
+                print(f"⚠️ {last_error}")
+                break
 
-    return content
+    raise Exception(f"❌ فشل التوليد عبر كل الموديلات. آخر خطأ: {last_error}")
 
 def render_slides_to_images(content):
     theme = random.choice(COLOR_THEMES)
