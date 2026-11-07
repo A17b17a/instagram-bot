@@ -2,7 +2,7 @@ name: Daily Multi-Platform Auto Poster
 
 on:
   schedule:
-    - cron: '0 4 * * *'   # 7:00 صباحاً بتوقيت بغداد/ديالى (UTC+3)
+    - cron: '0 17 * * 2,5'   # الثلاثاء والجمعة 8:00 مساءً بتوقيت بغداد/ديالى (UTC+3)
   workflow_dispatch:
 
 permissions:
